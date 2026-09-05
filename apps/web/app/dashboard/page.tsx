@@ -1,34 +1,51 @@
-import { createClient } from '../../lib/supabase/server'
 import Link from 'next/link'
+import { createClient } from '../../lib/supabase/server'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: claims } = await supabase.auth.getClaims()
   const userId = claims?.claims.sub as string | undefined
 
-  if (!userId) {
-    return <main style={{ padding: 48 }}><h1>Unauthorized</h1><Link href="/login">Sign in</Link></main>
-  }
+  if (!userId) return <main className="page"><div className="empty">Unauthorized · <Link className="table-link" href="/login">Sign in</Link></div></main>
 
-  const { data: profile } = await supabase.from('users').select('full_name, role').eq('id', userId).maybeSingle()
+  const [{ data: profile }, { data: metrics }] = await Promise.all([
+    supabase.from('users').select('full_name, role').eq('id', userId).maybeSingle(),
+    supabase.from('tenant_dashboard_metrics').select('total_leads, open_leads, hot_leads, calls_last_24h, overdue_tasks, active_projects, available_units, active_listings').maybeSingle(),
+  ])
+
+  const cards = [
+    ['Open leads', metrics?.open_leads ?? 0, '/dashboard/leads'],
+    ['Hot leads', metrics?.hot_leads ?? 0, '/dashboard/leads?temperature=Hot'],
+    ['Calls · 24h', metrics?.calls_last_24h ?? 0, '/dashboard/dialer'],
+    ['Overdue tasks', metrics?.overdue_tasks ?? 0, '/dashboard/leads'],
+  ] as const
 
   return (
-    <main style={{ maxWidth: 1200, margin: '0 auto', padding: 32 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div><p style={{ opacity: 0.6 }}>DASHBOARD</p><h1 style={{ margin: 0 }}>Welcome, {profile?.full_name ?? 'there'}</h1></div>
-        <span style={{ opacity: 0.65 }}>{profile?.role ?? 'authenticated'}</span>
-      </header>
-      <section style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        {[
-          ['Leads', 'Lead workspace'],
-          ['Calls', 'Calling activity'],
-          ['Properties', 'Inventory'],
-          ['Tasks', 'Today & overdue'],
-        ].map(([title, subtitle]) => <div key={title} style={{ padding: 20, border: '1px solid #242a31', borderRadius: 12, background: '#11151a' }}><strong>{title}</strong><p style={{ opacity: 0.6 }}>{subtitle}</p></div>)}
-      </section>
-      <section style={{ marginTop: 32, padding: 20, border: '1px solid #242a31', borderRadius: 12 }}>
-        <h2>Foundation</h2>
-        <p style={{ opacity: 0.7 }}>Supabase authentication and tenant-aware data access are connected. The next application slice is Leads + Calling + the mobile dialer.</p>
+    <main className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">RE CRM <span>01</span></div>
+        <nav>
+          <Link className="nav-link active" href="/dashboard">Overview</Link>
+          <Link className="nav-link" href="/dashboard/leads">Leads</Link>
+          <Link className="nav-link" href="/dashboard/dialer">Dialer</Link>
+          <Link className="nav-link" href="#">Tasks</Link>
+          <Link className="nav-link" href="#">Inventory</Link>
+          <Link className="nav-link" href="#">Reports</Link>
+        </nav>
+        <div className="sidebar-footer"><div className="muted small">SIGNED IN AS</div><strong>{profile?.full_name ?? 'CRM user'}</strong><span className="muted small">{profile?.role ?? 'authenticated'}</span></div>
+      </aside>
+
+      <section className="workspace">
+        <header className="topbar"><div><div className="eyebrow">OPERATIONS</div><h1>Overview</h1></div><div className="topbar-actions"><Link className="button secondary" href="/dashboard/leads">View leads</Link><Link className="button" href="/dashboard/dialer">Start calling</Link></div></header>
+
+        <div className="metric-grid">
+          {cards.map(([label, value, href]) => <Link className="metric-card" href={href} key={label}><span>{label}</span><strong>{value}</strong></Link>)}
+        </div>
+
+        <div className="content-grid">
+          <section className="panel"><div className="section-title"><h2>Workspace</h2></div><p className="muted">This is the control center for agents and managers. Leads, calls, tasks and inventory will share the same tenant-aware data model.</p><div className="quick-grid"><Link href="/dashboard/leads" className="quick-card"><strong>Lead workspace</strong><span>Search, qualify, call and follow up.</span></Link><Link href="/dashboard/dialer" className="quick-card"><strong>Campaign dialer</strong><span>Claim the next lead without double-assignment.</span></Link></div></section>
+          <section className="panel"><div className="section-title"><h2>Portfolio pulse</h2></div><div className="detail-grid"><div><span>Projects</span><strong>{metrics?.active_projects ?? 0}</strong></div><div><span>Available units</span><strong>{metrics?.available_units ?? 0}</strong></div><div><span>Active listings</span><strong>{metrics?.active_listings ?? 0}</strong></div><div><span>Total leads</span><strong>{metrics?.total_leads ?? 0}</strong></div></div></section>
+        </div>
       </section>
     </main>
   )
