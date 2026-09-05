@@ -1,6 +1,5 @@
 'use server'
 
-import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../../lib/supabase/server'
 
@@ -13,10 +12,8 @@ export type ShareMatchesState = {
 type MatchRow = {
   project_id: string
   project_name: string
-  developer_name: string | null
-  location_name: string | null
-  unit_id: string | null
-  unit_number: string | null
+  unit_id: string
+  unit_number: string
   listing_id: string | null
   price: number | null
   bedrooms: number | null
@@ -51,13 +48,13 @@ export async function shareMatchedProperties(_: ShareMatchesState, formData: For
 
   const { data: lead, error: leadError } = await supabase
     .from('leads')
-    .select('id, person_id, assigned_user_id')
+    .select('id, person_id, assigned_user_id, tenant_id')
     .eq('id', leadId)
     .maybeSingle()
   if (leadError || !lead) return { ok: false, message: 'Lead not found.' }
   if (lead.assigned_user_id !== userId) {
-    const { data: role } = await supabase.rpc('crm_current_user_role')
-    if (!['admin', 'manager', 'super_admin', 'owner'].includes(String(role ?? '').toLowerCase())) {
+    const { data: user, error: userError } = await supabase.from('users').select('role').eq('id', userId).maybeSingle()
+    if (userError || !user || !['admin', 'manager', 'super_admin', 'owner'].includes(user.role.toLowerCase())) {
       return { ok: false, message: 'You can only share properties for leads assigned to you.' }
     }
   }
@@ -65,7 +62,7 @@ export async function shareMatchedProperties(_: ShareMatchesState, formData: For
   const parsed = rawMatches.map((value) => {
     const [projectId, unitId, listingId] = value.split('|')
     return { projectId, unitId: unitId || null, listingId: listingId || null }
-  }).filter((item) => item.projectId && (item.unitId || item.listingId))
+  }).filter((item) => item.projectId && item.unitId)
 
   if (!parsed.length) return { ok: false, message: 'Selected properties are invalid.' }
 
@@ -73,8 +70,8 @@ export async function shareMatchedProperties(_: ShareMatchesState, formData: For
   const listingIds = parsed.map((item) => item.listingId).filter((id): id is string => Boolean(id))
 
   const [{ data: units }, { data: listings }, { data: projects }, { data: phone }] = await Promise.all([
-    unitIds.length ? supabase.from('units').select('id, project_id, unit_number, bedrooms, bathrooms, super_builtup_area_sqft, asking_price, facing, status').in('id', unitIds) : Promise.resolve({ data: [] as never[] }),
-    listingIds.length ? supabase.from('listings').select('id, unit_id, asking_price, rent_amount, status').in('id', listingIds) : Promise.resolve({ data: [] as never[] }),
+    supabase.from('units').select('id, project_id, unit_number, bedrooms, bathrooms, super_builtup_area_sqft, asking_price, facing, status').in('id', unitIds),
+    listingIds.length ? supabase.from('listings').select('id, unit_id, asking_price, rent_amount, status').in('id', listingIds) : Promise.resolve({ data: [] as { id: string; unit_id: string; asking_price: number | null; rent_amount: number | null; status: string }[] }),
     supabase.from('projects').select('id, name').in('id', parsed.map((item) => item.projectId)),
     supabase.from('person_phones').select('normalized_phone').eq('person_id', lead.person_id).eq('is_primary', true).maybeSingle(),
   ])
@@ -89,11 +86,10 @@ export async function shareMatchedProperties(_: ShareMatchesState, formData: For
     const listing = item.listingId ? listingById.get(item.listingId) : null
     const project = projectById.get(item.projectId)
     if (!project || !unit || unit.project_id !== project.id) continue
+    if (unit.status !== 'available' && unit.status !== 'reserved') continue
     verified.push({
       project_id: project.id,
       project_name: project.name,
-      developer_name: null,
-      location_name: null,
       unit_id: unit.id,
       unit_number: unit.unit_number,
       listing_id: listing?.id ?? null,
@@ -105,15 +101,15 @@ export async function shareMatchedProperties(_: ShareMatchesState, formData: For
     })
   }
 
-  if (!verified.length) return { ok: false, message: 'None of the selected properties are available in the current inventory.' }
+  if (!verified.length) return { ok: false, message: 'None of the selected properties are currently shareable.' }
   if (phone?.normalized_phone == null) return { ok: false, message: 'This lead has no primary phone number.' }
 
-  const messageLines = [
+  const messageBody = [
     'Hi! Based on your requirement, here are a few property options I shortlisted for you:',
     '',
     ...verified.map((match, index) => {
       const details = [
-        match.unit_number ? `Unit ${match.unit_number}` : 'Selected unit',
+        `Unit ${match.unit_number}`,
         match.bedrooms != null ? `${match.bedrooms} BHK` : null,
         match.area_sqft != null ? `${Number(match.area_sqft).toLocaleString('en-IN')} sq ft` : null,
         match.facing ? `${match.facing} facing` : null,
@@ -123,49 +119,44 @@ export async function shareMatchedProperties(_: ShareMatchesState, formData: For
     }),
     '',
     'Let me know which ones you would like to explore. I can arrange a site visit and share more details.'
-  ]
-  const messageBody = messageLines.join('\n')
+  ].join('\n')
 
-  const tenantId = await supabase.rpc('crm_current_tenant_id').then((result) => result.data)
-  if (!tenantId) return { ok: false, message: 'Tenant context is unavailable.' }
+  const db = supabase as unknown as {
+    from: (table: string) => {
+      insert: (values: Record<string, unknown> | Record<string, unknown>[]) => {
+        select: (columns?: string) => { single: () => Promise<{ data: { id: string } | null; error: { message: string } | null }> }
+      }
+    }
+  }
 
-  const { data: share, error: shareError } = await supabase
-    .from('communication_shares')
-    .insert({
-      tenant_id: tenantId,
-      lead_id: lead.id,
-      person_id: lead.person_id,
-      agent_id: userId,
-      channel: 'whatsapp',
-      message_body: messageBody,
-    })
-    .select('id')
-    .single()
+  const { data: share, error: shareError } = await db.from('communication_shares').insert({
+    tenant_id: lead.tenant_id,
+    lead_id: lead.id,
+    person_id: lead.person_id,
+    agent_id: userId,
+    channel: 'whatsapp',
+    message_body: messageBody,
+  }).select('id').single()
 
   if (shareError || !share) return { ok: false, message: shareError?.message ?? 'Unable to create share record.' }
 
-  const itemRows = verified.map((match) => ({
-    share_id: share.id,
-    project_id: match.project_id,
-    unit_id: match.unit_id,
-    listing_id: match.listing_id,
-  }))
-  const { error: itemError } = await supabase.from('communication_share_items').insert(itemRows)
+  const itemRows = verified.map((match) => ({ share_id: share.id, project_id: match.project_id, unit_id: match.unit_id, listing_id: match.listing_id }))
+  const { error: itemError } = await db.from('communication_share_items').insert(itemRows)
   if (itemError) return { ok: false, message: itemError.message }
 
   const interactionRows = verified.map((match) => ({
-    tenant_id: tenantId,
+    tenant_id: lead.tenant_id,
     person_id: lead.person_id,
     lead_id: lead.id,
     project_id: match.project_id,
     unit_id: match.unit_id,
     listing_id: match.listing_id,
-    interaction_type: 'shared' as const,
+    interaction_type: 'shared',
     source: 'whatsapp',
     agent_id: userId,
     notes: `Shared via CRM WhatsApp share ${share.id}`,
   }))
-  const { error: interactionError } = await supabase.from('property_interactions').insert(interactionRows)
+  const { error: interactionError } = await db.from('property_interactions').insert(interactionRows)
   if (interactionError) return { ok: false, message: interactionError.message }
 
   revalidatePath(`/dashboard/leads/${lead.id}`)
