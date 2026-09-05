@@ -32,12 +32,11 @@ export default function ShareMatches({ leadId, phone, matches }: { leadId: strin
 
   if (!matches.length) return null
 
-  const encodedLead = encodeURIComponent(leadId)
   const directWhatsApp = phone ? `https://wa.me/${phone.replace(/^\+/, '')}` : null
 
   return (
     <form action={formAction} className="share-form">
-      <input type="hidden" name="lead_id" value={encodedLead} />
+      <input type="hidden" name="lead_id" value={leadId} />
       {matches.map((match) => {
         const value = `${match.project_id}|${match.unit_id ?? ''}|${match.listing_id ?? ''}`
         return (
