@@ -1,0 +1,29 @@
+{
+  "name": "@realestate-crm/mobile",
+  "private": true,
+  "version": "0.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@realestate-crm/database": "workspace:*",
+    "@realestate-crm/dialer": "workspace:*",
+    "@supabase/supabase-js": "^2.57.4",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo": "latest",
+    "expo-linking": "latest",
+    "expo-router": "latest",
+    "expo-status-bar": "latest",
+    "react": "latest",
+    "react-native": "latest",
+    "react-native-safe-area-context": "latest",
+    "react-native-screens": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}
