@@ -18,11 +18,15 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
   const { session: sessionId } = await searchParams
   const supabase = await createClient()
 
-  const { data: campaigns, error } = await supabase
-    .from('dialer_campaigns')
-    .select('id, name, description, status, dialing_mode, max_attempts, allow_callbacks, allow_voicemail, created_at')
-    .order('created_at', { ascending: false })
-    .limit(50)
+  const [{ data: campaigns, error }, { data: roleData }] = await Promise.all([
+    supabase
+      .from('dialer_campaigns')
+      .select('id, name, description, status, dialing_mode, max_attempts, allow_callbacks, allow_voicemail, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase.rpc('crm_current_user_role'),
+  ])
+  const canManage = ['admin', 'manager', 'super_admin', 'owner'].includes(String(roleData ?? '').toLowerCase())
 
   let activeSession: Session | null = null
   if (sessionId) {
@@ -67,6 +71,7 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
           <p className="muted">Queue-aware assisted calling with atomic lead claiming and canonical CRM call history.</p>
         </div>
         <div className="actions-inline">
+          {canManage ? <Link className="button secondary" href="/dashboard/dialer/admin/new">Create campaign</Link> : null}
           <Link className="button secondary" href="/dashboard/leads">Leads</Link>
           {activeSession?.status === 'running' ? (
             <form action={stopDialerSession.bind(null, activeSession.id)}><button className="button danger" type="submit">Stop session</button></form>
@@ -92,42 +97,27 @@ export default async function DialerPage({ searchParams }: { searchParams: Promi
                 </div>
               </div>
               <form className="dialer-disposition" action={recordDialerDisposition.bind(null, activeSession.id, currentLead.id)}>
-                <label>
-                  Disposition
-                  <select name="outcome" defaultValue="connected" required>
-                    {Object.entries(outcomeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Notes
-                  <textarea name="notes" rows={3} placeholder="Capture objections, follow-up context, or call notes…" />
-                </label>
-                <div className="actions-inline">
-                  <button className="button" type="submit">Save disposition</button>
-                  <button className="button secondary" type="submit" formAction={skipDialerItem.bind(null, activeSession.id, currentLead.id)}>Skip lead</button>
-                </div>
+                <label>Disposition<select name="outcome" defaultValue="connected" required>{Object.entries(outcomeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                <label>Notes<textarea name="notes" rows={3} placeholder="Capture objections, follow-up context, or call notes…" /></label>
+                <div className="actions-inline"><button className="button" type="submit">Save disposition</button><button className="button secondary" type="submit" formAction={skipDialerItem.bind(null, activeSession.id, currentLead.id)}>Skip lead</button></div>
               </form>
-              <form className="next-lead-form" action={claimNextForSession.bind(null, activeSession.id, activeSession.campaign_id)}>
-                <button className="link-button" type="submit">Claim next available lead →</button>
-              </form>
+              <form className="next-lead-form" action={claimNextForSession.bind(null, activeSession.id, activeSession.campaign_id)}><button className="link-button" type="submit">Claim next available lead →</button></form>
             </>
-          ) : (
-            <div className="empty"><strong>Queue is clear.</strong><p className="muted">No eligible leads are available right now. Leads with a future retry time become claimable automatically.</p></div>
-          )}
+          ) : <div className="empty"><strong>Queue is clear.</strong><p className="muted">No eligible leads are available right now. Leads with a future retry time become claimable automatically.</p></div>}
         </section>
       ) : null}
 
       <section className="panel">
         <div className="section-title"><h2>Campaigns</h2><span className="muted small">{campaigns?.length ?? 0} available</span></div>
         {error ? <div className="empty">Unable to load campaigns: {error.message}</div> : null}
-        {!error && !campaigns?.length ? <div className="empty">No dialer campaigns yet. Create one from the campaign admin flow.</div> : null}
-        {campaigns?.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} activeSessionId={activeSession?.id ?? null} />)}
+        {!error && !campaigns?.length ? <div className="empty">No dialer campaigns yet. Managers can create one and load eligible leads.</div> : null}
+        {campaigns?.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} activeSessionId={activeSession?.id ?? null} canManage={canManage} />)}
       </section>
     </main>
   )
 }
 
-async function CampaignCard({ campaign, activeSessionId }: { campaign: { id: string; name: string; description: string | null; status: string; dialing_mode: string; max_attempts: number; allow_callbacks: boolean; allow_voicemail: boolean; created_at: string }; activeSessionId: string | null }) {
+async function CampaignCard({ campaign, activeSessionId, canManage }: { campaign: { id: string; name: string; description: string | null; status: string; dialing_mode: string; max_attempts: number; allow_callbacks: boolean; allow_voicemail: boolean; created_at: string }; activeSessionId: string | null; canManage: boolean }) {
   const supabase = await createClient()
   const [{ count: queued }, { count: dialing }, { count: completed }] = await Promise.all([
     supabase.from('dialer_campaign_leads').select('id', { count: 'exact', head: true }).eq('campaign_id', campaign.id).eq('status', 'queued'),
@@ -142,13 +132,10 @@ async function CampaignCard({ campaign, activeSessionId }: { campaign: { id: str
         <p className="muted">{campaign.description ?? 'No description'}</p>
         <div className="stats-inline"><span><strong>{queued ?? 0}</strong> queued</span><span><strong>{dialing ?? 0}</strong> dialing</span><span><strong>{completed ?? 0}</strong> completed</span><span>Mode: <strong>{campaign.dialing_mode}</strong></span></div>
       </div>
-      {campaign.status === 'running' && !activeSessionId ? (
-        <form action={startCampaign.bind(null, campaign.id)}><button className="button" type="submit">Start session</button></form>
-      ) : campaign.status !== 'running' ? (
-        <button className="button secondary" type="button" disabled>{campaign.status}</button>
-      ) : (
-        <span className="muted small">Session already active</span>
-      )}
+      <div className="actions-inline">
+        {canManage ? <Link className="button secondary" href={`/dashboard/dialer/admin/${campaign.id}`}>Manage</Link> : null}
+        {campaign.status === 'running' && !activeSessionId ? <form action={startCampaign.bind(null, campaign.id)}><button className="button" type="submit">Start session</button></form> : campaign.status !== 'running' ? <button className="button secondary" type="button" disabled>{campaign.status}</button> : <span className="muted small">Session already active</span>}
+      </div>
     </article>
   )
 }
