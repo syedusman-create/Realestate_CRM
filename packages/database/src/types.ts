@@ -16,6 +16,30 @@ export interface LeadRow { id: string; tenant_id: string; workspace_id: string |
 export interface CallRow { id: string; tenant_id: string; workspace_id: string | null; lead_id: string; person_id: string; agent_id: string | null; direction: string; started_at: string; ended_at: string | null; duration_seconds: number | null; outcome: CallOutcome; disposition: string | null; sub_disposition: string | null; notes: string | null; recording_url: string | null; created_at: string }
 export interface TaskRow { id: string; tenant_id: string; workspace_id: string | null; assigned_to: string | null; lead_id: string | null; person_id: string | null; task_type: TaskType; title: string; description: string | null; priority: LeadPriority; scheduled_at: string; due_at: string | null; completed_at: string | null; status: TaskStatus; source_activity_id: string | null; metadata: Json; created_at: string; updated_at: string }
 
+export interface DialerCampaignRow {
+  id: string; tenant_id: string; workspace_id: string | null; name: string; description: string | null;
+  status: 'draft' | 'running' | 'paused' | 'completed' | 'archived'; dialing_mode: 'assisted' | 'automatic';
+  max_attempts: number; retry_after_minutes: number; allow_callbacks: boolean; allow_voicemail: boolean;
+  quiet_hours: Json; compliance_config: Json; created_by: string | null; created_at: string; updated_at: string
+}
+export interface DialerCampaignLeadRow {
+  id: string; tenant_id: string; campaign_id: string; lead_id: string; person_id: string; phone_id: string;
+  status: 'queued' | 'dialing' | 'connected' | 'no_answer' | 'busy' | 'wrong_number' | 'voicemail' | 'callback' | 'completed' | 'skipped' | 'dnc' | 'failed';
+  attempt_count: number; priority: number; next_attempt_at: string | null; last_attempt_at: string | null;
+  claimed_by: string | null; claimed_at: string | null; completed_at: string | null; metadata: Json; created_at: string; updated_at: string
+}
+export interface DialerSessionRow {
+  id: string; tenant_id: string; workspace_id: string | null; campaign_id: string; agent_id: string; status: 'running' | 'paused' | 'stopped';
+  device_id: string | null; current_queue_item_id: string | null; started_at: string; paused_at: string | null; stopped_at: string | null;
+  last_heartbeat_at: string; stats: Json; created_at: string; updated_at: string
+}
+export interface DialerCallEventRow {
+  id: string; tenant_id: string; session_id: string | null; queue_item_id: string | null; lead_id: string | null; person_id: string | null;
+  call_id: string | null; agent_id: string | null; direction: 'inbound' | 'outbound';
+  event_type: 'initiated' | 'ringing' | 'connected' | 'ended' | 'missed' | 'failed' | 'rejected' | 'no_answer' | 'callback_detected';
+  event_at: string; normalized_phone: string | null; source: string; external_event_id: string | null; duration_seconds: number | null; raw_payload: Json; created_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -27,9 +51,16 @@ export interface Database {
       leads: { Row: LeadRow; Insert: LeadRow; Update: Partial<LeadRow>; Relationships: [] }
       calls: { Row: CallRow; Insert: CallRow; Update: Partial<CallRow>; Relationships: [] }
       tasks: { Row: TaskRow; Insert: TaskRow; Update: Partial<TaskRow>; Relationships: [] }
+      dialer_campaigns: { Row: DialerCampaignRow; Insert: Partial<DialerCampaignRow> & Pick<DialerCampaignRow, 'tenant_id' | 'name'>; Update: Partial<DialerCampaignRow>; Relationships: [] }
+      dialer_campaign_leads: { Row: DialerCampaignLeadRow; Insert: DialerCampaignLeadRow; Update: Partial<DialerCampaignLeadRow>; Relationships: [] }
+      dialer_sessions: { Row: DialerSessionRow; Insert: Partial<DialerSessionRow> & Pick<DialerSessionRow, 'tenant_id' | 'campaign_id' | 'agent_id'>; Update: Partial<DialerSessionRow>; Relationships: [] }
+      dialer_call_events: { Row: DialerCallEventRow; Insert: Partial<DialerCallEventRow> & Pick<DialerCallEventRow, 'tenant_id' | 'direction' | 'event_type'>; Update: Partial<DialerCallEventRow>; Relationships: [] }
     }
     Views: Record<string, unknown>
-    Functions: Record<string, unknown>
+    Functions: {
+      claim_next_dialer_item: { Args: { p_campaign_id: string; p_session_id: string }; Returns: Array<Pick<DialerCampaignLeadRow, 'id' | 'campaign_id' | 'lead_id' | 'person_id' | 'phone_id' | 'status' | 'attempt_count' | 'next_attempt_at' | 'claimed_by' | 'claimed_at' | 'priority'>> }
+      find_inbound_callback: { Args: { p_normalized_phone: string }; Returns: Array<{ person_id: string; lead_id: string; assigned_user_id: string | null; campaign_id: string | null; campaign_name: string | null; last_attempt_at: string | null; last_call_id: string | null }> }
+    }
     Enums: {
       crm_call_outcome: CallOutcome
       crm_lead_priority: LeadPriority
