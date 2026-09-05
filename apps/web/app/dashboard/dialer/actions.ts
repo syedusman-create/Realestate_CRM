@@ -61,6 +61,11 @@ export async function startCampaign(campaignId: string) {
   redirect(`/dashboard/dialer?session=${sessionId}`)
 }
 
+export async function claimNextForSession(sessionId: string, campaignId: string) {
+  await claimNextDialerItem(campaignId, sessionId)
+  revalidatePath('/dashboard/dialer')
+}
+
 export async function recordDialerDisposition(sessionId: string, queueItemId: string, formData: FormData) {
   const rawOutcome = String(formData.get('outcome') ?? '')
   if (!DIALER_OUTCOMES.includes(rawOutcome as DialerOutcome)) throw new Error('Invalid disposition')
