@@ -13,6 +13,9 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const city = params.city?.trim() ?? ''
   const supabase = await createClient()
 
+  const { data: role } = await supabase.rpc('crm_current_user_role')
+  const canManage = ['admin', 'manager', 'super_admin', 'owner'].includes(String(role ?? '').toLowerCase())
+
   let query = supabase
     .from('projects')
     .select('id, name, slug, property_category, property_type, city, state, status, possession_date, price_min, price_max, developer_id, location_id, total_units, total_towers')
@@ -38,7 +41,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
           <h1>Inventory</h1>
           <p className="muted">Projects, configurations, units and listings from the shared property master.</p>
         </div>
-        <Link className="button secondary" href="/dashboard">Overview</Link>
+        <div className="actions-inline">
+          <Link className="button secondary" href="/dashboard">Overview</Link>
+          {canManage ? <Link className="button" href="/dashboard/inventory/new">Add project</Link> : null}
+        </div>
       </div>
 
       <section className="panel">
@@ -57,7 +63,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
         {!error && !projects?.length ? (
           <div className="empty">
             <strong>No projects in the property master yet.</strong>
-            <p className="muted">The inventory schema is ready. Once projects are imported, they will appear here with configurations, units and listings.</p>
+            <p className="muted">The inventory schema is ready. Managers can add projects now; configurations, units and listings can then be loaded against the project.</p>
+            {canManage ? <p style={{ marginTop: 14 }}><Link className="button" href="/dashboard/inventory/new">Add the first project</Link></p> : null}
           </div>
         ) : null}
 
