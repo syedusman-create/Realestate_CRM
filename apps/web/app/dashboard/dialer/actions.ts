@@ -61,8 +61,10 @@ export async function startCampaign(campaignId: string) {
   redirect(`/dashboard/dialer?session=${sessionId}`)
 }
 
-export async function recordDialerDisposition(sessionId: string, queueItemId: string, outcome: DialerOutcome, formData: FormData) {
-  if (!DIALER_OUTCOMES.includes(outcome)) throw new Error('Invalid disposition')
+export async function recordDialerDisposition(sessionId: string, queueItemId: string, formData: FormData) {
+  const rawOutcome = String(formData.get('outcome') ?? '')
+  if (!DIALER_OUTCOMES.includes(rawOutcome as DialerOutcome)) throw new Error('Invalid disposition')
+  const outcome = rawOutcome as DialerOutcome
 
   const supabase = await createClient()
   const { data: claims } = await supabase.auth.getClaims()
@@ -120,7 +122,7 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
   if (callError) throw new Error(callError.message)
 
   const eventType = outcome === 'connected' ? 'connected' : outcome === 'no_answer' || outcome === 'not_connected' ? 'no_answer' : outcome === 'busy' ? 'failed' : 'ended'
-  await supabase.from('dialer_call_events').insert({
+  const { error: eventError } = await supabase.from('dialer_call_events').insert({
     tenant_id: item.tenant_id,
     session_id: session.id,
     queue_item_id: item.id,
@@ -136,6 +138,7 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
     duration_seconds: null,
     raw_payload: { disposition: outcome },
   })
+  if (eventError) throw new Error(eventError.message)
 
   let nextAttemptAt: string | null = null
   if (!terminal) {
@@ -146,13 +149,14 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
   }
 
   const finalStatus = nextAttemptAt ? queueStatus : terminal ? queueStatus : 'completed'
-  await supabase.from('dialer_campaign_leads').update({
+  const { error: queueError } = await supabase.from('dialer_campaign_leads').update({
     status: finalStatus,
     next_attempt_at: nextAttemptAt,
     completed_at: nextAttemptAt ? null : now.toISOString(),
     claimed_by: null,
     claimed_at: null,
   }).eq('id', item.id).eq('claimed_by', userId)
+  if (queueError) throw new Error(queueError.message)
 
   const nextFollowup = outcome === 'callback_requested' ? new Date(now.getTime() + 60 * 60_000).toISOString() : null
   await supabase.from('leads').update({
