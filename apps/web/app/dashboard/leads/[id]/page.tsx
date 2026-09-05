@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import { refreshRecommendations } from './actions'
+import ShareMatches from './share-matches'
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -36,7 +37,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </div>
         <div className="header-actions">
           {phone?.phone_number ? <a className="button" href={`tel:${phone.phone_number}`}>Call</a> : null}
-          {phone?.normalized_phone ? <a className="button secondary" href={`https://wa.me/${phone.normalized_phone.replace(/^\+/, '')}`}>WhatsApp</a> : null}
+          {phone?.normalized_phone && lead.person_id ? <a className="button secondary" href={`https://wa.me/${phone.normalized_phone.replace(/^\+/, '')}`}>WhatsApp</a> : null}
         </div>
       </div>
 
@@ -74,15 +75,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         <div className="section-title"><div><h2>Property matches</h2><p className="muted small">Ranked from the buyer requirement using the CRM matching engine.</p></div><form action={refreshRecommendations.bind(null, id)}><button className="button secondary" type="submit">Refresh matches</button></form></div>
         {recommendationError ? <div className="empty">Matching is unavailable: {recommendationError.message}</div> : null}
         {recommendations?.length ? (
-          <div className="recommendation-grid">
-            {recommendations.map((match) => <article className="recommendation-card" key={`${match.project_id}-${match.unit_id ?? match.rank}`}>
-              <div className="row-between"><span className="badge warm">#{match.rank} · {Number(match.total_score).toFixed(0)}%</span><span className="muted small">{match.unit_number ?? 'Unit matched'}</span></div>
-              <h3>{match.project_name}</h3>
-              <p className="muted small">{match.developer_name ?? 'Developer'} · {match.location_name ?? 'Location pending'}</p>
-              <div className="stats-inline"><span>{match.bedrooms ?? '—'} BHK</span><span>{match.area_sqft ? `${Number(match.area_sqft).toLocaleString('en-IN')} sq ft` : 'Area —'}</span><span>{formatMoney(match.price, match.price)}</span></div>
-              <p className="muted small">{formatReasons(match.reasons)}</p>
-            </article>)}
-          </div>
+          <>
+            <div className="recommendation-grid">
+              {recommendations.map((match) => <article className="recommendation-card" key={`${match.project_id}-${match.unit_id ?? match.rank}`}>
+                <div className="row-between"><span className="badge warm">#{match.rank} · {Number(match.total_score).toFixed(0)}%</span><span className="muted small">{match.unit_number ?? 'Unit matched'}</span></div>
+                <h3>{match.project_name}</h3>
+                <p className="muted small">{match.developer_name ?? 'Developer'} · {match.location_name ?? 'Location pending'}</p>
+                <div className="stats-inline"><span>{match.bedrooms ?? '—'} BHK</span><span>{match.area_sqft ? `${Number(match.area_sqft).toLocaleString('en-IN')} sq ft` : 'Area —'}</span><span>{formatMoney(match.price, match.price)}</span></div>
+                <p className="muted small">{formatReasons(match.reasons)}</p>
+              </article>)}
+            </div>
+            {phone?.normalized_phone ? <div className="share-section"><div><h3>Share with customer</h3><p className="muted small">Select the matches you want to send. The CRM records every property shared and opens WhatsApp with the prepared message.</p></div><ShareMatches leadId={id} phone={phone.normalized_phone} matches={recommendations} /></div> : <div className="empty">Add a primary phone number to enable tracked WhatsApp sharing.</div>}
+          </>
         ) : <div className="empty">No property matches yet. Load inventory and refresh this section to rank suitable units.</div>}
       </section>
 
