@@ -44,6 +44,9 @@ input:focus, select:focus, textarea:focus { border-color: #586574; }
 .form-grid label { display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 650; }
 .form-grid input, .form-grid select { color: var(--text); }
 .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+.form-message { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); font-size: 12px; }
+.form-message.success { border-color: #3d6147; }
+.form-message.error { border-color: #613a36; }
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { padding: 8px 11px; color: var(--muted); font-size: 12px; }
 .chip.active { color: var(--text); background: var(--panel-2); }
@@ -80,6 +83,14 @@ tr:last-child td { border-bottom: 0; }
 .recommendation-card { border: 1px solid var(--border); background: var(--panel-2); border-radius: 12px; padding: 16px; }
 .recommendation-card h3 { margin: 14px 0 6px; font-size: 16px; }
 .recommendation-card p { line-height: 1.5; }
+.share-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+.share-section h3 { margin: 0 0 5px; font-size: 15px; }
+.share-form { margin-top: 14px; display: grid; gap: 8px; }
+.share-choice { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px; border: 1px solid var(--border); background: var(--panel-2); border-radius: 10px; cursor: pointer; }
+.share-choice:hover { border-color: #3a434e; }
+.share-choice input[type="checkbox"] { width: auto; margin-top: 3px; accent-color: var(--accent); }
+.share-choice > span { display: flex; flex-direction: column; gap: 4px; }
+.share-result { display: inline-flex; margin-top: 10px; color: var(--text); font-size: 12px; font-weight: 750; }
 .inventory-hero { min-height: 240px; border-radius: 14px; border: 1px solid var(--border); background-size: cover; background-position: center; display: flex; align-items: end; padding: 18px; margin-bottom: 14px; overflow: hidden; }
 .inventory-hero span { padding: 7px 10px; background: rgba(11,13,16,.78); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; font-size: 12px; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 230px 1fr; }
