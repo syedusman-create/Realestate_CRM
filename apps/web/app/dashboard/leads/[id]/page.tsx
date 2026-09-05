@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
+import { refreshRecommendations } from './actions'
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -11,14 +12,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     .select('*')
     .eq('lead_id', id)
     .maybeSingle()
-
   if (!lead) notFound()
 
-  const [{ data: phones }, { data: calls }, { data: tasks }, { data: requirements }] = await Promise.all([
+  const [{ data: phones }, { data: calls }, { data: tasks }, { data: requirements }, { data: recommendations, error: recommendationError }] = await Promise.all([
     supabase.from('person_phones').select('id, phone_number, normalized_phone, is_primary, is_whatsapp').eq('person_id', lead.person_id ?? ''),
     supabase.from('calls').select('id, direction, started_at, ended_at, duration_seconds, outcome, disposition, sub_disposition, notes').eq('lead_id', id).order('started_at', { ascending: false }).limit(12),
     supabase.from('tasks').select('id, task_type, title, scheduled_at, due_at, status, priority').eq('lead_id', id).order('scheduled_at', { ascending: true }).limit(12),
     supabase.from('requirements').select('id, requirement_type, purpose, bedrooms_min, bedrooms_max, budget_min, budget_max, area_min_sqft, area_max_sqft, bathrooms_min, furnishing, preferred_facing, possession_before, notes').eq('lead_id', id).eq('is_active', true).order('created_at', { ascending: false }).limit(1),
+    supabase.rpc('get_property_recommendations', { p_lead_id: id, p_limit: 6 }),
   ])
 
   const phone = phones?.find((item) => item.is_primary) ?? phones?.[0]
@@ -35,7 +36,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </div>
         <div className="header-actions">
           {phone?.phone_number ? <a className="button" href={`tel:${phone.phone_number}`}>Call</a> : null}
-          <a className="button secondary" href={phone?.normalized_phone ? `https://wa.me/${phone.normalized_phone.replace(/^\+/, '')}` : '#'}>WhatsApp</a>
+          {phone?.normalized_phone ? <a className="button secondary" href={`https://wa.me/${phone.normalized_phone.replace(/^\+/, '')}`}>WhatsApp</a> : null}
         </div>
       </div>
 
@@ -69,7 +70,23 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </section>
       </div>
 
-      <section className="panel">
+      <section className="panel" style={{ marginTop: 14 }}>
+        <div className="section-title"><div><h2>Property matches</h2><p className="muted small">Ranked from the buyer requirement using the CRM matching engine.</p></div><form action={refreshRecommendations.bind(null, id)}><button className="button secondary" type="submit">Refresh matches</button></form></div>
+        {recommendationError ? <div className="empty">Matching is unavailable: {recommendationError.message}</div> : null}
+        {recommendations?.length ? (
+          <div className="recommendation-grid">
+            {recommendations.map((match) => <article className="recommendation-card" key={`${match.project_id}-${match.unit_id ?? match.rank}`}>
+              <div className="row-between"><span className="badge warm">#{match.rank} · {Number(match.total_score).toFixed(0)}%</span><span className="muted small">{match.unit_number ?? 'Unit matched'}</span></div>
+              <h3>{match.project_name}</h3>
+              <p className="muted small">{match.developer_name ?? 'Developer'} · {match.location_name ?? 'Location pending'}</p>
+              <div className="stats-inline"><span>{match.bedrooms ?? '—'} BHK</span><span>{match.area_sqft ? `${Number(match.area_sqft).toLocaleString('en-IN')} sq ft` : 'Area —'}</span><span>{formatMoney(match.price, match.price)}</span></div>
+              <p className="muted small">{formatReasons(match.reasons)}</p>
+            </article>)}
+          </div>
+        ) : <div className="empty">No property matches yet. Load inventory and refresh this section to rank suitable units.</div>}
+      </section>
+
+      <section className="panel" style={{ marginTop: 14 }}>
         <div className="section-title"><h2>Call history</h2><span className="muted small">{calls?.length ?? 0} recent</span></div>
         {calls?.length ? calls.map((call) => <div className="list-row" key={call.id}><div><strong>{call.direction === 'outbound' ? 'Outbound' : 'Inbound'} · {call.outcome.replaceAll('_', ' ')}</strong><div className="muted small">{call.disposition ?? call.sub_disposition ?? call.notes ?? 'No disposition notes'}</div></div><div className="muted small">{new Date(call.started_at).toLocaleString()}</div></div>) : <div className="empty">No calls recorded yet.</div>}
       </section>
@@ -88,4 +105,9 @@ function formatRange(min: number | null, max: number | null) {
   if (min == null && max == null) return 'Any'
   if (min != null && max != null && min !== max) return `${min.toLocaleString('en-IN')}–${max.toLocaleString('en-IN')}`
   return (min ?? max ?? 0).toLocaleString('en-IN')
+}
+
+function formatReasons(reasons: unknown) {
+  if (!reasons || typeof reasons !== 'object') return 'Matched against saved requirement.'
+  return Object.entries(reasons as Record<string, unknown>).slice(0, 3).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${String(value)}`).join(' · ')
 }
