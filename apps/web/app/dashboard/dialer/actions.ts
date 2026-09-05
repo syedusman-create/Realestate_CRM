@@ -19,15 +19,10 @@ export async function startDialerSession(campaignId: string) {
   const { data: tenant, error: tenantError } = await supabase.from('tenants').select('id').eq('tenant_code', user.tenant_code).maybeSingle()
   if (tenantError || !tenant) throw new Error('Tenant not found')
 
-  const { data: campaign, error: campaignError } = await supabase
-    .from('dialer_campaigns')
-    .select('id, status')
-    .eq('id', campaignId)
-    .maybeSingle()
+  const { data: campaign, error: campaignError } = await supabase.from('dialer_campaigns').select('id, status').eq('id', campaignId).maybeSingle()
   if (campaignError || !campaign) throw new Error('Campaign not found')
   if (campaign.status !== 'running') throw new Error('Campaign is not running')
 
-  // One active session per agent keeps queue ownership deterministic.
   await supabase
     .from('dialer_sessions')
     .update({ status: 'stopped', stopped_at: new Date().toISOString(), current_queue_item_id: null })
@@ -66,13 +61,14 @@ export async function startCampaign(campaignId: string) {
   redirect(`/dashboard/dialer?session=${sessionId}`)
 }
 
-export async function recordDialerDisposition(sessionId: string, queueItemId: string, outcome: DialerOutcome, notes: string) {
+export async function recordDialerDisposition(sessionId: string, queueItemId: string, outcome: DialerOutcome, formData: FormData) {
   if (!DIALER_OUTCOMES.includes(outcome)) throw new Error('Invalid disposition')
 
   const supabase = await createClient()
   const { data: claims } = await supabase.auth.getClaims()
   const userId = claims?.claims.sub as string | undefined
   if (!userId) throw new Error('Unauthorized')
+  const notes = String(formData.get('notes') ?? '').trim()
 
   const { data: session, error: sessionError } = await supabase
     .from('dialer_sessions')
@@ -92,7 +88,6 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
   if (itemError || !item) throw new Error('Queue item is no longer owned by this session')
 
   const now = new Date()
-  const callOutcome = outcome
   const terminal = outcome === 'connected' || outcome === 'wrong_number' || outcome === 'voicemail' || outcome === 'callback_requested'
   const queueStatus = outcome === 'callback_requested'
     ? 'callback'
@@ -116,14 +111,15 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
     started_at: item.last_attempt_at ?? now.toISOString(),
     ended_at: now.toISOString(),
     duration_seconds: null,
-    outcome: callOutcome,
+    outcome,
     disposition: outcome,
     sub_disposition: null,
-    notes: notes.trim() || null,
+    notes: notes || null,
     recording_url: null,
   }).select('id').single()
   if (callError) throw new Error(callError.message)
 
+  const eventType = outcome === 'connected' ? 'connected' : outcome === 'no_answer' || outcome === 'not_connected' ? 'no_answer' : outcome === 'busy' ? 'failed' : 'ended'
   await supabase.from('dialer_call_events').insert({
     tenant_id: item.tenant_id,
     session_id: session.id,
@@ -133,7 +129,7 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
     call_id: call.id,
     agent_id: userId,
     direction: 'outbound',
-    event_type: outcome === 'connected' ? 'connected' : outcome === 'no_answer' || outcome === 'not_connected' ? 'no_answer' : outcome === 'busy' ? 'failed' : 'ended',
+    event_type: eventType,
     normalized_phone: null,
     source: 'web-assisted',
     external_event_id: null,
@@ -141,9 +137,8 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
     raw_payload: { disposition: outcome },
   })
 
-  const retryable = !terminal && item.attempt_count < 20
   let nextAttemptAt: string | null = null
-  if (retryable) {
+  if (!terminal) {
     const { data: campaign } = await supabase.from('dialer_campaigns').select('retry_after_minutes, max_attempts').eq('id', session.campaign_id).maybeSingle()
     if (campaign && item.attempt_count < campaign.max_attempts) {
       nextAttemptAt = new Date(now.getTime() + campaign.retry_after_minutes * 60_000).toISOString()
@@ -159,11 +154,11 @@ export async function recordDialerDisposition(sessionId: string, queueItemId: st
     claimed_at: null,
   }).eq('id', item.id).eq('claimed_by', userId)
 
-  if (outcome === 'callback_requested') {
-    await supabase.from('leads').update({ next_followup_at: new Date(now.getTime() + 60 * 60_000).toISOString(), last_contact_at: now.toISOString() }).eq('id', item.lead_id)
-  } else {
-    await supabase.from('leads').update({ last_contact_at: now.toISOString() }).eq('id', item.lead_id)
-  }
+  const nextFollowup = outcome === 'callback_requested' ? new Date(now.getTime() + 60 * 60_000).toISOString() : null
+  await supabase.from('leads').update({
+    last_contact_at: now.toISOString(),
+    ...(nextFollowup ? { next_followup_at: nextFollowup } : {}),
+  }).eq('id', item.lead_id)
 
   await supabase.from('dialer_sessions').update({ current_queue_item_id: null, last_heartbeat_at: now.toISOString() }).eq('id', session.id).eq('agent_id', userId)
 
@@ -177,11 +172,9 @@ export async function skipDialerItem(sessionId: string, queueItemId: string) {
   const userId = claims?.claims.sub as string | undefined
   if (!userId) throw new Error('Unauthorized')
 
-  const { error } = await supabase
-    .from('dialer_campaign_leads')
-    .update({ status: 'skipped', completed_at: new Date().toISOString(), claimed_by: null, claimed_at: null })
-    .eq('id', queueItemId)
-    .eq('claimed_by', userId)
+  const { error } = await supabase.from('dialer_campaign_leads').update({
+    status: 'skipped', completed_at: new Date().toISOString(), claimed_by: null, claimed_at: null,
+  }).eq('id', queueItemId).eq('claimed_by', userId)
   if (error) throw new Error(error.message)
 
   await supabase.from('dialer_sessions').update({ current_queue_item_id: null, last_heartbeat_at: new Date().toISOString() }).eq('id', sessionId).eq('agent_id', userId)
