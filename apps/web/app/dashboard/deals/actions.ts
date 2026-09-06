@@ -23,6 +23,7 @@ async function context() {
 export async function saveDeal(_: DealActionState = initialState, formData: FormData): Promise<DealActionState> {
   try {
     const { supabase, userId } = await context()
+    const db = supabase as any
     const dealId = text(formData.get('deal_id'))
     const leadId = text(formData.get('lead_id'))
     const stageId = text(formData.get('stage_id')) || null
@@ -37,8 +38,9 @@ export async function saveDeal(_: DealActionState = initialState, formData: Form
     if (!leadId || !dealName) return { ok: false, message: 'Lead and deal name are required.' }
     if (Number.isNaN(dealValue) || (probability != null && (!Number.isInteger(probability) || probability < 0 || probability > 100)) || !statuses.has(status)) return { ok: false, message: 'Deal values are invalid.' }
 
-    let existingQuery = supabase.from('deals').select('id, lead_id, owner_user_id, pipeline_id').eq('lead_id', leadId).maybeSingle()
-    const { data: existing, error: existingError } = dealId ? await supabase.from('deals').select('id, lead_id, owner_user_id, pipeline_id').eq('id', dealId).maybeSingle() : await existingQuery
+    const { data: existing, error: existingError } = dealId
+      ? await db.from('deals').select('id, lead_id, owner_user_id, pipeline_id').eq('id', dealId).maybeSingle()
+      : await db.from('deals').select('id, lead_id, owner_user_id, pipeline_id').eq('lead_id', leadId).maybeSingle()
     if (existingError || !existing) return { ok: false, message: 'Opportunity not found or not accessible.' }
     if (existing.lead_id !== leadId) return { ok: false, message: 'Opportunity does not belong to this lead.' }
     if (existing.owner_user_id && existing.owner_user_id !== userId) {
@@ -46,12 +48,11 @@ export async function saveDeal(_: DealActionState = initialState, formData: Form
       if (!manager) return { ok: false, message: 'You can only edit opportunities assigned to you.' }
     }
     if (stageId) {
-      const { data: stage, error: stageError } = await supabase.from('pipeline_stages').select('id, pipeline_id, stage_type, win_probability').eq('id', stageId).maybeSingle()
+      const { data: stage, error: stageError } = await supabase.from('pipeline_stages').select('id, pipeline_id').eq('id', stageId).maybeSingle()
       if (stageError || !stage) return { ok: false, message: 'Selected stage is invalid.' }
       if (existing.pipeline_id && stage.pipeline_id !== existing.pipeline_id) return { ok: false, message: 'Stage does not belong to this pipeline.' }
     }
-    const payload = { deal_name: dealName, stage_id: stageId, deal_value: dealValue, expected_close_date: expectedClose, probability, status, lost_reason: lostReason, notes, closed_at: status === 'open' || status === 'paused' ? null : new Date().toISOString(), updated_at: new Date().toISOString() }
-    const { error } = await supabase.from('deals').update(payload).eq('id', existing.id)
+    const { error } = await db.from('deals').update({ deal_name: dealName, stage_id: stageId, deal_value: dealValue, expected_close_date: expectedClose, probability, status, lost_reason: lostReason, notes, closed_at: status === 'open' || status === 'paused' ? null : new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', existing.id)
     if (error) return { ok: false, message: error.message }
     revalidatePath(`/dashboard/leads/${leadId}`); revalidatePath('/dashboard/deals'); revalidatePath('/dashboard')
     return { ok: true, message: 'Opportunity saved.' }
