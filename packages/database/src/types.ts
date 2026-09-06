@@ -1,5 +1,4 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
-
 export type CallOutcome = 'connected' | 'not_connected' | 'busy' | 'no_answer' | 'wrong_number' | 'voicemail' | 'callback_requested'
 export type LeadPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type LeadTemperature = 'cold' | 'warm' | 'hot'
@@ -39,10 +38,10 @@ export interface DialerCampaignLeadRow { id: string; tenant_id: string; campaign
 export interface DialerSessionRow { id: string; tenant_id: string; workspace_id: string | null; campaign_id: string; agent_id: string; status: 'running' | 'paused' | 'stopped'; device_id: string | null; current_queue_item_id: string | null; started_at: string; paused_at: string | null; stopped_at: string | null; last_heartbeat_at: string; stats: Json; created_at: string; updated_at: string }
 export interface DialerCallEventRow { id: string; tenant_id: string; session_id: string | null; queue_item_id: string | null; lead_id: string | null; person_id: string | null; call_id: string | null; agent_id: string | null; direction: 'inbound' | 'outbound'; event_type: string; event_at: string; normalized_phone: string | null; source: string; external_event_id: string | null; duration_seconds: number | null; raw_payload: Json; created_at: string }
 export interface RecommendationRow { recommendation_run_id: string; rank: number; total_score: number; project_id: string; project_name: string; developer_name: string | null; location_name: string | null; unit_id: string | null; unit_number: string | null; listing_id: string | null; price: number | null; bedrooms: number | null; bathrooms: number | null; area_sqft: number | null; facing: string | null; floor_number: number | null; reasons: Json }
-
-export interface LeadDashboardRow { lead_id: string; person_id: string; person_name: string; phone: string | null; email: string | null; assigned_user_id: string | null; assigned_user_name: string | null; priority: LeadPriority | null; temperature: LeadTemperature | null; lead_score: number | null; pipeline_name: string | null; stage_name: string | null; created_at: string | null; updated_at: string | null; first_contact_at: string | null; last_contact_at: string | null; next_followup_at: string | null; next_task_due_at: string | null; call_count: number | null; closed_at: string | null; tenant_id: string | null; workspace_id: string | null }
+export interface LeadDashboardRow { lead_id: string; person_id: string; person_name: string; phone: string | null; email: string | null; assigned_user_id: string | null; assigned_user_name: string | null; priority: LeadPriority | null; temperature: LeadTemperature | null; lead_score: number | null; pipeline_name: string | null; pipeline_id: string | null; status_id: string | null; stage_name: string | null; notes: string | null; created_at: string | null; updated_at: string | null; first_contact_at: string | null; last_contact_at: string | null; next_followup_at: string | null; next_task_due_at: string | null; call_count: number | null; closed_at: string | null; tenant_id: string | null; workspace_id: string | null }
 export interface TenantDashboardMetricsRow { tenant_id: string | null; tenant_code: string | null; tenant_name: string | null; open_leads: number | null; hot_leads: number | null; calls_last_24h: number | null; overdue_tasks: number | null; tasks_next_24h: number | null; active_projects: number | null; available_units: number | null; active_listings: number | null; total_leads: number | null }
 export interface LeadSourcePerformanceRow { source_id: string | null; source_name: string | null; platform: string | null; tenant_id: string | null; leads: number | null; open_leads: number | null; closed_hot_leads: number | null; avg_lead_score: number | null }
+export interface LeadActivityTimelineRow { lead_id: string; activity_id: string; activity_type: 'call' | 'task' | 'property_share' | 'property_interaction' | 'status_change' | 'assignment_change'; occurred_at: string; title: string; detail: string | null; actor_name: string | null }
 
 export interface Database {
   public: {
@@ -71,6 +70,7 @@ export interface Database {
       lead_dashboard: { Row: LeadDashboardRow; Relationships: [] }
       tenant_dashboard_metrics: { Row: TenantDashboardMetricsRow; Insert: never; Update: never; Relationships: [] }
       lead_source_performance: { Row: LeadSourcePerformanceRow; Insert: never; Update: never; Relationships: [] }
+      lead_activity_timeline: { Row: LeadActivityTimelineRow; Insert: never; Update: never; Relationships: [] }
     }
     Functions: {
       claim_next_dialer_item: { Args: { p_campaign_id: string; p_session_id: string }; Returns: Array<Pick<DialerCampaignLeadRow, 'id' | 'campaign_id' | 'lead_id' | 'person_id' | 'phone_id' | 'status' | 'attempt_count' | 'next_attempt_at' | 'claimed_by' | 'claimed_at' | 'priority'>> }
@@ -86,6 +86,7 @@ export interface Database {
       ensure_default_followup_sequence: { Args: { p_tenant_id: string; p_workspace_id?: string }; Returns: string }
       enroll_lead_followup: { Args: { p_lead_id: string; p_sequence_id?: string }; Returns: string }
       process_due_followups: { Args: { p_limit?: number }; Returns: number }
+      reassign_lead: { Args: { p_lead_id: string; p_new_assigned_user_id: string; p_reason?: string | null }; Returns: string }
     }
     Enums: {
       allocation_strategy: 'round_robin' | 'equal_distribution' | 'on_demand'
@@ -113,7 +114,6 @@ export interface Database {
     CompositeTypes: Record<string, unknown>
   }
 }
-
 export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
 export type TableInsert<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Insert']
 export type TableUpdate<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update']
