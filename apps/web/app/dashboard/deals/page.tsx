@@ -3,15 +3,18 @@ import { createClient } from '../../../lib/supabase/server'
 
 const statusTabs = ['all', 'open', 'won', 'lost', 'paused'] as const
 
+type DealRow = { deal_id: string; lead_id: string; deal_name: string; deal_value: number | null; expected_close_date: string | null; probability: number | null; stage_probability: number | null; status: string; stage_name: string | null; owner_name: string | null; person_name: string }
+
 export default async function DealsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const params = await searchParams
   const status = statusTabs.includes(params.status as (typeof statusTabs)[number]) ? params.status : 'all'
   const supabase = await createClient()
   const { data: claims } = await supabase.auth.getClaims()
   if (!claims?.claims.sub) return <main className="page"><div className="notice">Please sign in to view the sales pipeline.</div></main>
-  let query = supabase.from('deal_pipeline').select('*').order('updated_at', { ascending: false }).limit(200)
+  const db = supabase as any
+  let query = db.from('deal_pipeline').select('*').order('updated_at', { ascending: false }).limit(200)
   if (status !== 'all') query = query.eq('status', status)
-  const { data: deals, error } = await query
+  const { data: deals, error } = await query as { data: DealRow[] | null; error: { message: string } | null }
   const rows = deals ?? []
   const openValue = rows.filter((d) => d.status === 'open').reduce((sum, d) => sum + Number(d.deal_value ?? 0), 0)
   const weightedValue = rows.filter((d) => d.status === 'open').reduce((sum, d) => sum + Number(d.deal_value ?? 0) * Number(d.probability ?? d.stage_probability ?? 0) / 100, 0)
