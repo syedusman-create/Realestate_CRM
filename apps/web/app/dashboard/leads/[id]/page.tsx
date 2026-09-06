@@ -6,9 +6,12 @@ import ShareMatches from './share-matches'
 import LeadEditor from './lead-editor'
 import { createDeal, saveDeal } from '../../deals/actions'
 
+type Deal = { deal_id: string; status: string; deal_name: string; stage_name: string | null; owner_name: string | null; deal_value: number | null; expected_close_date: string | null; probability: number | null; stage_probability: number | null; stage_id: string | null }
+
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  const db = supabase as any
   const { data: claims } = await supabase.auth.getClaims()
   const userId = claims?.claims.sub as string | undefined
   if (!userId) notFound()
@@ -21,7 +24,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     supabase.from('requirements').select('id, requirement_type, purpose, bedrooms_min, bedrooms_max, budget_min, budget_max, area_min_sqft, area_max_sqft, bathrooms_min, furnishing, preferred_facing, possession_before, parking_required, notes').eq('lead_id', id).eq('is_active', true).order('created_at', { ascending: false }).limit(1),
     supabase.rpc('get_property_recommendations', { p_lead_id: id, p_limit: 6 }),
     supabase.from('lead_activity_timeline').select('activity_id, activity_type, occurred_at, title, detail, actor_name').eq('lead_id', id).order('occurred_at', { ascending: false }).limit(40),
-    supabase.from('deal_pipeline').select('*').eq('lead_id', id).maybeSingle(),
+    db.from('deal_pipeline').select('*').eq('lead_id', id).maybeSingle() as Promise<{ data: Deal | null; error: { message: string } | null }>,
   ])
   if (!lead || !leadRecord) notFound()
   const { data: phones } = await supabase.from('person_phones').select('id, phone_number, normalized_phone, is_primary, is_whatsapp').eq('person_id', leadRecord.person_id)
@@ -49,5 +52,5 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     <section className="panel" style={{ marginTop: 14 }}><div className="section-title"><h2>Call history</h2><span className="muted small">{calls?.length ?? 0} recent</span></div>{calls?.length ? calls.map((call) => <div className="list-row" key={call.id}><div><strong>{call.direction === 'outbound' ? 'Outbound' : 'Inbound'} · {call.outcome.replaceAll('_', ' ')}</strong><div className="muted small">{call.disposition ?? call.sub_disposition ?? call.notes ?? 'No disposition notes'}</div></div><div className="muted small">{new Date(call.started_at).toLocaleString()}</div></div>) : <div className="empty">No calls recorded yet.</div>}</section>
   </main>
 }
-function formatMoney(min: number | null, max?: number | null) { if (min == null && max == null) return 'Any'; const money = (value: number) => value >= 10000000 ? `₹${(value / 10000000).toFixed(2)} Cr` : value >= 100000 ? `₹${(value / 100000).toFixed(1)} L` : `₹${value.toLocaleString('en-IN')}`; if (max != null && min !== max) return `${money(min ?? max)} – ${money(max)}`; return money(min ?? max ?? 0) }
+function formatMoney(min: number | null, max?: number | null) { if (min == null && max == null) return 'Any'; const value = min ?? max ?? 0; if (max != null && value !== max) return `${formatMoney(value)} – ${formatMoney(max)}`; if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`; if (value >= 100000) return `₹${(value / 100000).toFixed(1)} L`; return `₹${value.toLocaleString('en-IN')}` }
 function formatReasons(reasons: unknown) { if (!reasons || typeof reasons !== 'object') return 'Matched against saved requirement.'; return Object.entries(reasons as Record<string, unknown>).slice(0, 3).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${String(value)}`).join(' · ') }
