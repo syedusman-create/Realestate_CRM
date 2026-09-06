@@ -11,11 +11,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { data: claims } = await supabase.auth.getClaims()
   const userId = claims?.claims.sub as string | undefined
   if (!userId) notFound()
-  const [{ data: lead }, { data: leadRecord }, { data: userProfile }, { data: phones }, { data: calls }, { data: tasks }, { data: requirements }, { data: recommendations, error: recommendationError }, { data: timeline }] = await Promise.all([
+  const [{ data: lead }, { data: leadRecord }, { data: userProfile }, { data: calls }, { data: tasks }, { data: requirements }, { data: recommendations, error: recommendationError }, { data: timeline }] = await Promise.all([
     supabase.from('lead_dashboard').select('*').eq('lead_id', id).maybeSingle(),
     supabase.from('leads').select('id, assigned_user_id, pipeline_id, status_id, priority, temperature, notes, person_id').eq('id', id).maybeSingle(),
     supabase.from('users').select('id, role').eq('id', userId).maybeSingle(),
-    supabase.from('person_phones').select('id, phone_number, normalized_phone, is_primary, is_whatsapp').eq('person_id', id),
     supabase.from('calls').select('id, direction, started_at, ended_at, duration_seconds, outcome, disposition, sub_disposition, notes').eq('lead_id', id).order('started_at', { ascending: false }).limit(12),
     supabase.from('tasks').select('id, task_type, title, scheduled_at, due_at, status, priority').eq('lead_id', id).order('scheduled_at', { ascending: true }).limit(12),
     supabase.from('requirements').select('id, requirement_type, purpose, bedrooms_min, bedrooms_max, budget_min, budget_max, area_min_sqft, area_max_sqft, bathrooms_min, furnishing, preferred_facing, possession_before, parking_required, notes').eq('lead_id', id).eq('is_active', true).order('created_at', { ascending: false }).limit(1),
@@ -23,6 +22,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     supabase.from('lead_activity_timeline').select('activity_id, activity_type, occurred_at, title, detail, actor_name').eq('lead_id', id).order('occurred_at', { ascending: false }).limit(40),
   ])
   if (!lead || !leadRecord) notFound()
+  const { data: phones } = await supabase.from('person_phones').select('id, phone_number, normalized_phone, is_primary, is_whatsapp').eq('person_id', leadRecord.person_id)
   const phone = phones?.find((item) => item.is_primary) ?? phones?.[0]
   const requirement = requirements?.[0] ?? null
   const canManage = ['admin', 'manager', 'administrator', 'sales_manager', 'team_lead', 'owner', 'super_admin'].includes((userProfile?.role ?? '').toLowerCase())
