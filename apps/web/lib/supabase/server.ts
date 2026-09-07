@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import type { Database } from '@realestate-crm/database'
 
 export async function createClient() {
   const cookieStore = await cookies()
@@ -11,7 +10,7 @@ export async function createClient() {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
   }
 
-  return createServerClient<Database>(url, key, {
+  return createServerClient<any>(url, key, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
