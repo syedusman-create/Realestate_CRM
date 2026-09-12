@@ -8,7 +8,7 @@ import { createDealForm, saveDealForm } from '../../deals/actions'
 
 type Deal = { deal_id: string; status: string; deal_name: string; stage_name: string | null; owner_name: string | null; deal_value: number | null; expected_close_date: string | null; probability: number | null; stage_probability: number | null; stage_id: string | null; lost_reason: string | null; notes: string | null }
 
-type RecommendationMatch = { project_id: string; unit_id: string | null; rank: number; total_score: number; unit_number: string | null; project_name: string; developer_name: string | null; location_name: string | null; bedrooms: number | null; area_sqft: number | null; price: number | null; reasons: unknown }
+type RecommendationMatch = { project_id: string; unit_id: string | null; listing_id: string | null; rank: number; total_score: number; unit_number: string | null; project_name: string; developer_name: string | null; location_name: string | null; bedrooms: number | null; bathrooms: number | null; area_sqft: number | null; facing: string | null; price: number | null; reasons: unknown }
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
