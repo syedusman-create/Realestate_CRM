@@ -121,13 +121,7 @@ export async function shareMatchedProperties(_: ShareMatchesState, formData: For
     'Let me know which ones you would like to explore. I can arrange a site visit and share more details.'
   ].join('\n')
 
-  const db = supabase as unknown as {
-    from: (table: string) => {
-      insert: (values: Record<string, unknown> | Record<string, unknown>[]) => {
-        select: (columns?: string) => { single: () => Promise<{ data: { id: string } | null; error: { message: string } | null }> }
-      }
-    }
-  }
+  const db = supabase as any
 
   const { data: share, error: shareError } = await db.from('communication_shares').insert({
     tenant_id: lead.tenant_id,
