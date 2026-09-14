@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Real Estate CRM",
+    "slug": "realestate-crm",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "realestatecrm",
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}
