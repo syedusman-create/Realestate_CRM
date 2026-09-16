@@ -6,7 +6,7 @@ const filters = ['All', 'Hot', 'Warm', 'Cold'] as const
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ q?: string; temperature?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
-  let query = supabase
+  const query = supabase
     .from('lead_dashboard')
     .select('lead_id, person_id, person_name, phone, email, assigned_user_name, priority, temperature, lead_score, stage_name, next_task_due_at, last_contact_at, created_at')
     .order('created_at', { ascending: false })
@@ -32,7 +32,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           <h1>Lead workspace</h1>
           <p className="muted">Every customer, owner, next action, and conversation in one place.</p>
         </div>
-        <Link className="button" href="/dashboard/dialer">Open dialer</Link>
+        <div className="topbar-actions"><Link className="button secondary" href="/dashboard/leads/import">Import leads</Link><Link className="button" href="/dashboard/dialer">Open dialer</Link></div>
       </div>
 
       <section className="panel filters">
