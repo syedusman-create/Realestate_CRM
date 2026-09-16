@@ -103,8 +103,8 @@ export default async function DashboardPage() {
   const copy = ROLE_COPY[role]
   const teamScope = role === 'manager' && profile?.workspace_id ? profile.workspace_id : null
 
-  const [openLeads, hotLeads, calls24h, overdueTasks] = role === 'admin'
-    ? [0, 0, 0, 0]
+  const personal: DashboardMetricSet = role === 'admin'
+    ? { openLeads: 0, hotLeads: 0, calls24h: 0, overdueTasks: 0 }
     : await Promise.all([
         teamScope
           ? supabase.from('leads').select('id', { count: 'exact', head: true }).eq('workspace_id', teamScope).is('closed_at', null)
@@ -118,9 +118,13 @@ export default async function DashboardPage() {
         teamScope
           ? supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('workspace_id', teamScope).lt('due_at', new Date().toISOString()).neq('status', 'completed')
           : supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assigned_to', userId).lt('due_at', new Date().toISOString()).neq('status', 'completed'),
-      ]).then(results => results.map(result => result.count ?? 0))
+      ]).then(([open, hot, calls, tasks]) => ({
+        openLeads: open.count ?? 0,
+        hotLeads: hot.count ?? 0,
+        calls24h: calls.count ?? 0,
+        overdueTasks: tasks.count ?? 0,
+      }))
 
-  const personal: DashboardMetricSet = { openLeads, hotLeads, calls24h, overdueTasks }
   const dashboardMetrics: DashboardMetricSet = {
     openLeads: metrics?.open_leads ?? 0,
     hotLeads: metrics?.hot_leads ?? 0,
