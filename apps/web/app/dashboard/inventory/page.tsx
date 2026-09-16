@@ -43,6 +43,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
         </div>
         <div className="actions-inline">
           <Link className="button secondary" href="/dashboard">Overview</Link>
+          {canManage ? <Link className="button secondary" href="/dashboard/inventory/import">Import properties</Link> : null}
           {canManage ? <Link className="button" href="/dashboard/inventory/new">Add project</Link> : null}
         </div>
       </div>
