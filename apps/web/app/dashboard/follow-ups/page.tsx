@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '../../../lib/supabase/server'
-import { ensureDefaultSequence, runDueAutomation } from './actions'
+import FollowUpAutomationControls from './controls'
 
 export default async function FollowUpsPage() {
   const supabase = await createClient()
@@ -26,10 +26,7 @@ export default async function FollowUpsPage() {
 
     <section className="panel">
       <div className="section-title"><div><h2>Automation controls</h2><p className="muted small">The database engine is tenant-scoped and uses row locking so due enrollments are not generated twice by concurrent workers.</p></div></div>
-      <div className="actions-inline" style={{ marginTop: 12 }}>
-        <form action={ensureDefaultSequence}><button className="button" type="submit">Create default sequence</button></form>
-        <form action={runDueAutomation}><button className="button secondary" type="submit">Run due automation now</button></form>
-      </div>
+      <FollowUpAutomationControls />
       <p className="muted small" style={{ marginTop: 10 }}>Scheduled execution still requires a Supabase Cron job; this page provides a safe manual trigger while that scheduler is configured.</p>
     </section>
 

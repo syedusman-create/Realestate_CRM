@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '../../../../lib/supabase/server'
+import { createClient } from '../../../lib/supabase/server'
 
 type State = { ok: boolean; message: string }
 const initial: State = { ok: true, message: '' }
