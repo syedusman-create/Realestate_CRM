@@ -61,7 +61,14 @@ const ROLE_COPY: Record<CrmRole, { eyebrow: string; title: string; description: 
   },
 }
 
-function scopedCards(role: CrmRole, metrics: Record<string, number>, personal: Record<string, number>) {
+type DashboardMetricSet = {
+  openLeads: number
+  hotLeads: number
+  calls24h: number
+  overdueTasks: number
+}
+
+function scopedCards(role: CrmRole, metrics: DashboardMetricSet, personal: DashboardMetricSet) {
   if (role === 'admin') {
     return [
       ['Open leads', metrics.openLeads, '/dashboard/leads'],
@@ -113,8 +120,8 @@ export default async function DashboardPage() {
           : supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assigned_to', userId).lt('due_at', new Date().toISOString()).neq('status', 'completed'),
       ]).then(results => results.map(result => result.count ?? 0))
 
-  const personal = { openLeads, hotLeads, calls24h, overdueTasks }
-  const dashboardMetrics = {
+  const personal: DashboardMetricSet = { openLeads, hotLeads, calls24h, overdueTasks }
+  const dashboardMetrics: DashboardMetricSet = {
     openLeads: metrics?.open_leads ?? 0,
     hotLeads: metrics?.hot_leads ?? 0,
     calls24h: metrics?.calls_last_24h ?? 0,
