@@ -167,13 +167,6 @@ export default async function DialerPage() {
             Work active campaign queues from the calling device.
           </p>
         </div>
-
-        <Link
-          href="/dashboard/dialer/admin"
-          className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
-        >
-          Campaign management
-        </Link>
       </header>
 
       {session &&
