@@ -1,59 +1,237 @@
-import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { createClient } from '../../../../../lib/supabase/server'
-import { populateCampaign } from '../actions'
+import {
+  notFound,
+  redirect,
+} from 'next/navigation'
 
-export default async function CampaignAdminPage({ params }: { params: Promise<{ id: string }> }) {
+import CampaignEditor from '@/components/dialer/campaign-editor'
+
+import {
+  createClient,
+} from '@/lib/supabase/server'
+
+import type {
+  CampaignDistributionMode,
+  DialerMode,
+} from '@/lib/crm/dialer/types'
+
+type CampaignPageProps = {
+  params: Promise<{
+    id: string
+  }>
+}
+
+export default async function CampaignAdminPage({
+  params,
+}: CampaignPageProps) {
   const { id } = await params
-  const supabase = await createClient()
-  const [{ data: campaign }, { data: queue }] = await Promise.all([
-    supabase.from('dialer_campaigns').select('id, name, description, status, dialing_mode, max_attempts, retry_after_minutes, created_at').eq('id', id).maybeSingle(),
-    supabase.from('dialer_campaign_leads').select('id, lead_id, person_id, status, attempt_count, priority, last_attempt_at').eq('campaign_id', id).order('priority', { ascending: false }).order('created_at', { ascending: false }).limit(100),
-  ])
-  if (!campaign) notFound()
 
-  const peopleIds = [...new Set((queue ?? []).map((item) => item.person_id))]
-  const { data: people } = peopleIds.length ? await supabase.from('people').select('id, display_name').in('id', peopleIds) : { data: [] as { id: string; display_name: string }[] }
-  const personMap = new Map((people ?? []).map((person) => [person.id, person.display_name]))
+  const supabase =
+    await createClient()
 
-  const counts = (queue ?? []).reduce<Record<string, number>>((result, item) => {
-    result[item.status] = (result[item.status] ?? 0) + 1
-    return result
-  }, {})
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const {
+    data: profile,
+    error: profileError,
+  } = await supabase
+    .from('users')
+    .select(
+      'id, role, is_active, tenant_code, workspace_id',
+    )
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (
+    profileError ||
+    !profile?.is_active ||
+    profile.role !== 'admin'
+  ) {
+    redirect('/unauthorized')
+  }
+
+  const {
+    data: campaign,
+    error: campaignError,
+  } = await supabase
+    .from('dialer_campaigns')
+    .select(
+      `
+        id,
+        name,
+        description,
+        status,
+        distribution_mode,
+        round_robin_cursor,
+        dialing_mode,
+        max_attempts,
+        retry_after_minutes,
+        allow_callbacks,
+        allow_voicemail,
+        created_by,
+        created_at,
+        updated_at
+      `,
+    )
+    .eq('id', id)
+    .maybeSingle()
+
+  if (campaignError) {
+    throw new Error(
+      campaignError.message,
+    )
+  }
+
+  if (!campaign) {
+    notFound()
+  }
+
+  const {
+    data: users,
+    error: usersError,
+  } = await supabase
+    .from('users')
+    .select(
+      'id, full_name, role, is_active',
+    )
+    .eq(
+      'tenant_code',
+      profile.tenant_code,
+    )
+    .eq(
+      'workspace_id',
+      profile.workspace_id,
+    )
+    .eq(
+      'is_active',
+      true,
+    )
+    .order('full_name', {
+      ascending: true,
+    })
+
+  if (usersError) {
+    throw new Error(
+      usersError.message,
+    )
+  }
+
+  const {
+    data: members,
+    error: membersError,
+  } = await supabase
+    .from(
+      'dialer_campaign_members',
+    )
+    .select(
+      'user_id, distribution_order, is_active',
+    )
+    .eq(
+      'campaign_id',
+      campaign.id,
+    )
+    .eq(
+      'is_active',
+      true,
+    )
+    .order(
+      'distribution_order',
+      {
+        ascending: true,
+      },
+    )
+
+  if (membersError) {
+    throw new Error(
+      membersError.message,
+    )
+  }
+
+  const memberUserIds =
+    (members ?? []).map(
+      (member) =>
+        member.user_id,
+    )
 
   return (
-    <main className="page">
-      <div className="page-header">
-        <div>
-          <Link className="back-link" href="/dashboard/dialer">← Dialer</Link>
-          <div className="eyebrow">CAMPAIGN ADMIN</div>
-          <h1>{campaign.name}</h1>
-          <p className="muted">{campaign.description ?? 'Configure audience and monitor queue state.'}</p>
+    <div className="page">
+      <div className="mb-8">
+        <div className="eyebrow">
+          Dialer / Campaigns
         </div>
-        <div className="actions-inline"><span className={`badge ${campaign.status === 'running' ? 'warm' : 'cold'}`}>{campaign.status}</span><Link className="button secondary" href="/dashboard/dialer">Back to dialer</Link></div>
+
+        <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1>
+              {campaign.name}
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Manage campaign settings, members,
+              lead distribution, calling rules, and
+              campaign lifecycle.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium capitalize">
+              {campaign.status.replace(
+                /_/g,
+                ' ',
+              )}
+            </span>
+
+            <span className="rounded-full border border-brand-gold/30 bg-brand-gold/10 px-3 py-1 text-xs font-medium text-brand-gold-dark">
+              {campaign.distribution_mode ===
+              'equal_split'
+                ? 'Equal split'
+                : campaign.distribution_mode ===
+                    'round_robin'
+                  ? 'Round robin'
+                  : 'On demand'}
+            </span>
+
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+              {memberUserIds.length}{' '}
+              member
+              {memberUserIds.length === 1
+                ? ''
+                : 's'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="metric-grid">
-        <div className="metric-card"><span>Queued</span><strong>{counts.queued ?? 0}</strong></div>
-        <div className="metric-card"><span>Dialing</span><strong>{counts.dialing ?? 0}</strong></div>
-        <div className="metric-card"><span>Completed</span><strong>{counts.completed ?? 0}</strong></div>
-        <div className="metric-card"><span>Total loaded</span><strong>{queue?.length ?? 0}</strong></div>
-      </div>
-
-      <section className="panel">
-        <div className="section-title"><div><h2>Populate audience</h2><p className="muted small">Only assigned leads with a usable phone are loaded. Existing lead ownership is never changed.</p></div></div>
-        <form className="form-grid" action={populateCampaign.bind(null, id)}>
-          <label>Temperature<select name="temperature" defaultValue="any"><option value="any">Any</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select></label>
-          <label>Max leads<input name="limit" type="number" min="1" max="5000" defaultValue="100" /></label>
-          <label>Queue priority<input name="priority" type="number" min="0" max="100" defaultValue="10" /></label>
-          <div className="form-actions"><button className="button primary" type="submit">Load eligible leads</button></div>
-        </form>
-      </section>
-
-      <section className="panel" style={{ marginTop: 14 }}>
-        <div className="section-title"><h2>Campaign queue</h2><span className="muted small">Latest 100</span></div>
-        {queue?.length ? <div className="panel table-wrap" style={{ padding: 0, marginTop: 14 }}><table><thead><tr><th>Customer</th><th>Status</th><th>Attempts</th><th>Priority</th><th>Last attempt</th></tr></thead><tbody>{queue.map((item) => <tr key={item.id}><td><Link className="table-link" href={`/dashboard/leads/${item.lead_id}`}>{personMap.get(item.person_id) ?? 'Customer'}</Link><div className="muted small">Lead {item.lead_id}</div></td><td><span className={`badge ${item.status === 'queued' ? 'warm' : 'cold'}`}>{item.status.replaceAll('_', ' ')}</span></td><td>{item.attempt_count}</td><td>{item.priority}</td><td>{item.last_attempt_at ? new Date(item.last_attempt_at).toLocaleString() : 'Never'}</td></tr>)}</tbody></table></div> : <div className="empty">No leads loaded yet. Use the audience form above to populate this campaign.</div>}
-      </section>
-    </main>
+      <CampaignEditor
+        campaign={{
+          id: campaign.id,
+          name: campaign.name,
+          description:
+            campaign.description,
+          distribution_mode:
+            campaign.distribution_mode as CampaignDistributionMode,
+          round_robin_cursor:
+            campaign.round_robin_cursor,
+          dialing_mode:
+            campaign.dialing_mode as DialerMode,
+          max_attempts:
+            campaign.max_attempts,
+          retry_after_minutes:
+            campaign.retry_after_minutes,
+          allow_callbacks:
+            campaign.allow_callbacks,
+          allow_voicemail:
+            campaign.allow_voicemail,
+          member_user_ids:
+            memberUserIds,
+        }}
+        users={users ?? []}
+      />
+    </div>
   )
 }

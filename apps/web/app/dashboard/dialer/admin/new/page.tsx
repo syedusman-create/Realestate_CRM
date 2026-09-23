@@ -1,27 +1,85 @@
-import Link from 'next/link'
-import { createCampaign } from '../actions'
+import { redirect } from 'next/navigation'
 
-export default function NewCampaignPage() {
+import CampaignEditor from '@/components/dialer/campaign-editor'
+import { createClient } from '@/lib/supabase/server'
+
+export default async function NewCampaignPage() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const {
+    data: profile,
+  } = await supabase
+    .from('users')
+    .select(
+      'role, is_active, tenant_code, workspace_id',
+    )
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (
+    !profile?.is_active ||
+    profile.role !== 'admin'
+  ) {
+    redirect('/unauthorized')
+  }
+
+  const {
+    data: users,
+    error: usersError,
+  } = await supabase
+    .from('users')
+    .select(
+      'id, full_name, role, is_active',
+    )
+    .eq(
+      'tenant_code',
+      profile.tenant_code,
+    )
+    .eq(
+      'workspace_id',
+      profile.workspace_id,
+    )
+    .eq(
+      'is_active',
+      true,
+    )
+    .order('full_name')
+
+  if (usersError) {
+    throw new Error(
+      usersError.message,
+    )
+  }
+
   return (
-    <main className="page">
-      <div className="page-header">
-        <div>
-          <Link className="back-link" href="/dashboard/dialer">← Dialer</Link>
-          <div className="eyebrow">CAMPAIGN ADMIN</div>
-          <h1>Create campaign</h1>
-          <p className="muted">Define the queue rules first. Audience loading happens after the campaign is created.</p>
+    <div className="page">
+      <div className="mb-8">
+        <div className="eyebrow">
+          Dialer
         </div>
+
+        <h1 className="mt-2">
+          Create campaign
+        </h1>
+
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          Create a calling campaign, select its
+          members, and define how new leads are
+          distributed across the campaign.
+        </p>
       </div>
 
-      <form className="panel form-grid" action={createCampaign}>
-        <label>Campaign name<input name="name" required placeholder="September hot leads" /></label>
-        <label>Dialing mode<select name="dialing_mode" defaultValue="assisted"><option value="assisted">Assisted</option><option value="automatic">Automatic (native transport required)</option></select></label>
-        <label>Status<select name="status" defaultValue="draft"><option value="draft">Draft</option><option value="running">Running</option><option value="paused">Paused</option></select></label>
-        <label>Maximum attempts<input name="max_attempts" type="number" min="1" max="20" defaultValue="3" /></label>
-        <label>Retry interval (minutes)<input name="retry_after_minutes" type="number" min="1" max="43200" defaultValue="60" /></label>
-        <label>Description<textarea name="description" rows={4} placeholder="Purpose, audience, script context…" /></label>
-        <div className="form-actions"><Link className="button secondary" href="/dashboard/dialer">Cancel</Link><button className="button" type="submit">Create campaign</button></div>
-      </form>
-    </main>
+      <CampaignEditor
+        users={users ?? []}
+      />
+    </div>
   )
 }

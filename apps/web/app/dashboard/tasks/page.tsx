@@ -1,117 +1,365 @@
-import Link from 'next/link'
-import { createClient } from '../../../lib/supabase/server'
-import CompleteTaskButton from './complete-task-button'
+import { TaskEditor } from '@/components/tasks/task-editor'
+import { TaskFilters } from '@/components/tasks/task-filters'
+import { TaskHeader } from '@/components/tasks/task-header'
+import { TaskList } from '@/components/tasks/task-list'
+import { TaskMetrics } from '@/components/tasks/task-metrics'
+import {
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+  TASK_TYPES,
+  type TaskListFilters,
+  type TaskListItem,
+} from '@/lib/crm/tasks/types'
+import { createClient } from '@/lib/supabase/server'
 
-const tabs = [
-  ['all', 'All'],
-  ['overdue', 'Overdue'],
-  ['today', 'Today'],
-  ['upcoming', 'Upcoming'],
-] as const
+type SearchParams = Promise<
+  Record<string, string | string[] | undefined>
+>
 
-function taskTone(status: string, dueAt: string | null, scheduledAt: string) {
-  if (status !== 'pending' && status !== 'in_progress') return 'cold'
-  const now = Date.now()
-  if (dueAt && new Date(dueAt).getTime() < now) return 'hot'
-  if (new Date(scheduledAt).toDateString() === new Date().toDateString()) return 'warm'
-  return 'cold'
-}
+function getParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = params[key]
 
-function formatDate(value: string | null) {
-  if (!value) return 'No due date'
-  return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const params = await searchParams
-  const view = params.view && tabs.some(([key]) => key === params.view) ? params.view : 'all'
-  const supabase = await createClient()
-
-  const { data: claims } = await supabase.auth.getClaims()
-  const userId = claims?.claims.sub as string | undefined
-  if (!userId) return <main className="page"><div className="empty">Unauthorized · <Link className="table-link" href="/login">Sign in</Link></div></main>
-
-  const now = new Date()
-  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
-  const startOfTomorrow = new Date(startOfToday); startOfTomorrow.setDate(startOfTomorrow.getDate() + 1)
-  const endOfUpcoming = new Date(startOfToday); endOfUpcoming.setDate(endOfUpcoming.getDate() + 14)
-
-  let query = supabase
-    .from('tasks')
-    .select('id, lead_id, person_id, task_type, title, description, priority, scheduled_at, due_at, status, assigned_to')
-    .in('status', ['pending', 'in_progress'])
-    .order('due_at', { ascending: true, nullsFirst: false })
-    .order('scheduled_at', { ascending: true })
-    .limit(150)
-
-  if (view === 'overdue') query = query.lt('due_at', now.toISOString())
-  if (view === 'today') query = query.gte('scheduled_at', startOfToday.toISOString()).lt('scheduled_at', startOfTomorrow.toISOString())
-  if (view === 'upcoming') query = query.gte('scheduled_at', startOfTomorrow.toISOString()).lt('scheduled_at', endOfUpcoming.toISOString())
-
-  const { data: tasks, error } = await query
-  const leadIds = [...new Set((tasks ?? []).map((task) => task.lead_id).filter(Boolean))] as string[]
-  const personIds = [...new Set((tasks ?? []).map((task) => task.person_id).filter(Boolean))] as string[]
-  const [{ data: leads }, { data: people }] = await Promise.all([
-    leadIds.length ? supabase.from('leads').select('id, assigned_user_id, temperature').in('id', leadIds) : Promise.resolve({ data: [] as { id: string; assigned_user_id: string | null; temperature: string }[] }),
-    personIds.length ? supabase.from('people').select('id, display_name').in('id', personIds) : Promise.resolve({ data: [] as { id: string; display_name: string }[] }),
-  ])
-
-  const leadMap = new Map((leads ?? []).map((lead) => [lead.id, lead]))
-  const peopleMap = new Map((people ?? []).map((person) => [person.id, person.display_name]))
-  const mine = (tasks ?? []).filter((task) => !task.assigned_to || task.assigned_to === userId || leadMap.get(task.lead_id ?? '')?.assigned_user_id === userId)
-
-  const counts = {
-    all: mine.length,
-    overdue: mine.filter((task) => task.due_at && new Date(task.due_at).getTime() < Date.now()).length,
-    today: mine.filter((task) => new Date(task.scheduled_at) >= startOfToday && new Date(task.scheduled_at) < startOfTomorrow).length,
-    upcoming: mine.filter((task) => new Date(task.scheduled_at) >= startOfTomorrow && new Date(task.scheduled_at) < endOfUpcoming).length,
+  if (Array.isArray(value)) {
+    return value[0] ?? ''
   }
 
+  return value ?? ''
+}
+
+function isTaskStatus(
+  value: string,
+): value is (typeof TASK_STATUSES)[number] {
+  return TASK_STATUSES.some((item) => item === value)
+}
+
+function isTaskType(
+  value: string,
+): value is (typeof TASK_TYPES)[number] {
+  return TASK_TYPES.some((item) => item === value)
+}
+
+function isTaskPriority(
+  value: string,
+): value is (typeof TASK_PRIORITIES)[number] {
+  return TASK_PRIORITIES.some((item) => item === value)
+}
+
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
+  const params = await searchParams
+
+  const scopeParam = getParam(params, 'scope')
+  const statusParam = getParam(params, 'status')
+  const taskTypeParam = getParam(params, 'taskType')
+  const priorityParam = getParam(params, 'priority')
+  const assignedToParam = getParam(params, 'assignedTo')
+
+  const filters: TaskListFilters = {
+    q: getParam(params, 'q'),
+
+    scope:
+      scopeParam === 'mine' || scopeParam === 'unassigned'
+        ? scopeParam
+        : 'all',
+
+    status: isTaskStatus(statusParam) ? statusParam : 'all',
+
+    taskType: isTaskType(taskTypeParam) ? taskTypeParam : 'all',
+
+    priority: isTaskPriority(priorityParam)
+      ? priorityParam
+      : 'all',
+
+    assignedTo: assignedToParam || 'all',
+  }
+
+  const showCreate = getParam(params, 'create') === '1'
+
+  const supabase = await createClient()
+
+  const {
+    data: {
+      user: currentUser,
+    },
+  } = await supabase.auth.getUser()
+
+  if (!currentUser) {
+    throw new Error('Unauthorized')
+  }
+
+  const [tasksResult, usersResult, leadsResult] = await Promise.all([
+    supabase
+      .from('tasks')
+      .select(
+        `
+          id,
+          tenant_id,
+          workspace_id,
+          assigned_to,
+          lead_id,
+          person_id,
+          task_type,
+          title,
+          description,
+          priority,
+          scheduled_at,
+          due_at,
+          completed_at,
+          status,
+          source_activity_id,
+          metadata,
+          created_at,
+          updated_at
+        `,
+      )
+      .order('scheduled_at', { ascending: true })
+      .limit(500),
+
+    supabase
+      .from('users')
+      .select('id, full_name, role, is_active')
+      .eq('is_active', true)
+      .order('full_name', { ascending: true }),
+
+    supabase
+      .from('leads')
+      .select('id, person_id')
+      .order('created_at', { ascending: false })
+      .limit(500),
+  ])
+
+  if (tasksResult.error) {
+    throw new Error(tasksResult.error.message)
+  }
+
+  if (usersResult.error) {
+    throw new Error(usersResult.error.message)
+  }
+
+  if (leadsResult.error) {
+    throw new Error(leadsResult.error.message)
+  }
+
+  const tasks = tasksResult.data ?? []
+  const users = usersResult.data ?? []
+  const leads = leadsResult.data ?? []
+
+  const personIds = [
+    ...new Set(
+      tasks
+        .map((task) => task.person_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ]
+
+  const peopleResult =
+    personIds.length > 0
+      ? await supabase
+          .from('people')
+          .select('id, first_name, last_name, display_name')
+          .in('id', personIds)
+      : { data: [], error: null }
+
+  if (peopleResult.error) {
+    throw new Error(peopleResult.error.message)
+  }
+
+  const peopleById = new Map(
+    (peopleResult.data ?? []).map((person) => [
+      person.id,
+      person.display_name ||
+        [person.first_name, person.last_name]
+          .filter(Boolean)
+          .join(' ') ||
+        'Unnamed contact',
+    ]),
+  )
+
+  const usersById = new Map(
+    users.map((user) => [
+      user.id,
+      {
+        id: user.id,
+        full_name: user.full_name,
+        role: user.role,
+      },
+    ]),
+  )
+
+  const leadsById = new Map(
+    leads.map((lead) => [
+      lead.id,
+      {
+        id: lead.id,
+        person_id: lead.person_id,
+      },
+    ]),
+  )
+
+  const enrichedTasks: TaskListItem[] = tasks.map((task) => {
+    const personId =
+      task.person_id ??
+      (task.lead_id
+        ? leadsById.get(task.lead_id)?.person_id ?? null
+        : null)
+
+    return {
+      ...task,
+
+      assignee: task.assigned_to
+        ? usersById.get(task.assigned_to) ?? null
+        : null,
+
+      person_name: personId
+        ? peopleById.get(personId) ?? null
+        : null,
+    }
+  })
+
+  const normalizedQuery = filters.q.trim().toLowerCase()
+
+  const filteredTasks = enrichedTasks.filter((task) => {
+    if (
+      filters.scope === 'mine' &&
+      task.assigned_to !== currentUser.id
+    ) {
+      return false
+    }
+
+    if (
+      filters.scope === 'unassigned' &&
+      task.assigned_to !== null
+    ) {
+      return false
+    }
+
+    if (
+      filters.status !== 'all' &&
+      task.status !== filters.status
+    ) {
+      return false
+    }
+
+    if (
+      filters.taskType !== 'all' &&
+      task.task_type !== filters.taskType
+    ) {
+      return false
+    }
+
+    if (
+      filters.priority !== 'all' &&
+      task.priority !== filters.priority
+    ) {
+      return false
+    }
+
+    if (
+      filters.assignedTo !== 'all' &&
+      task.assigned_to !== filters.assignedTo
+    ) {
+      return false
+    }
+
+    if (normalizedQuery) {
+      const haystack = [
+        task.title,
+        task.description,
+        task.person_name,
+        task.assignee?.full_name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      if (!haystack.includes(normalizedQuery)) {
+        return false
+      }
+    }
+
+    return true
+  })
+
+  const now = new Date()
+
+  const startOfToday = new Date(now)
+  startOfToday.setHours(0, 0, 0, 0)
+
+  const endOfToday = new Date(startOfToday)
+  endOfToday.setDate(endOfToday.getDate() + 1)
+
+  const metrics = {
+    total: enrichedTasks.length,
+
+    pending: enrichedTasks.filter(
+      (task) => task.status === 'pending',
+    ).length,
+
+    inProgress: enrichedTasks.filter(
+      (task) => task.status === 'in_progress',
+    ).length,
+
+    today: enrichedTasks.filter((task) => {
+      const scheduledAt = new Date(task.scheduled_at)
+
+      return (
+        scheduledAt >= startOfToday &&
+        scheduledAt < endOfToday &&
+        task.status !== 'completed' &&
+        task.status !== 'cancelled' &&
+        task.status !== 'skipped'
+      )
+    }).length,
+
+    overdue: enrichedTasks.filter((task) => {
+      if (!task.due_at) {
+        return false
+      }
+
+      if (
+        task.status === 'completed' ||
+        task.status === 'cancelled' ||
+        task.status === 'skipped'
+      ) {
+        return false
+      }
+
+      return new Date(task.due_at) < now
+    }).length,
+
+    completed: enrichedTasks.filter(
+      (task) => task.status === 'completed',
+    ).length,
+  }
+
+  const editorUsers = users.map((user) => ({
+    id: user.id,
+    full_name: user.full_name,
+    role: user.role,
+  }))
+
   return (
-    <main className="page">
-      <div className="page-header">
-        <div>
-          <div className="eyebrow">EXECUTION</div>
-          <h1>Tasks</h1>
-          <p className="muted">Your follow-up queue, callbacks, property shares and viewing actions.</p>
-        </div>
-        <Link className="button secondary" href="/dashboard">Overview</Link>
-      </div>
+    <div className="space-y-6">
+      <TaskHeader />
 
-      <section className="panel">
-        <div className="chips">
-          {tabs.map(([key, label]) => <Link key={key} className={`chip ${view === key ? 'active' : ''}`} href={`/dashboard/tasks?view=${key}`}>{label} · {counts[key]}</Link>)}
-        </div>
+      {showCreate ? (
+        <TaskEditor users={editorUsers} />
+      ) : null}
 
-        {error ? <div className="empty">Unable to load tasks: {error.message}</div> : null}
-        {!error && !mine.length ? <div className="empty"><strong>Nothing in this queue.</strong><p className="muted">Completed and cancelled tasks disappear from the execution queue automatically.</p></div> : null}
+      <TaskMetrics metrics={metrics} />
 
-        {mine.length ? <div style={{ marginTop: 18 }}>
-          {mine.map((task) => {
-            const lead = task.lead_id ? leadMap.get(task.lead_id) : null
-            const personName = task.person_id ? peopleMap.get(task.person_id) : null
-            const tone = taskTone(task.status, task.due_at, task.scheduled_at)
-            return <div className="task-row" key={task.id}>
-              <div className="task-main">
-                <div className="row-between">
-                  <div className="actions-inline">
-                    <span className={`badge ${tone}`}>{task.task_type.replaceAll('_', ' ')}</span>
-                    <span className="badge">{task.priority}</span>
-                    {lead?.temperature ? <span className={`badge ${lead.temperature === 'hot' ? 'hot' : lead.temperature === 'warm' ? 'warm' : 'cold'}`}>{lead.temperature}</span> : null}
-                  </div>
-                  <span className="muted small">{formatDate(task.due_at ?? task.scheduled_at)}</span>
-                </div>
-                <strong>{task.title}</strong>
-                <div className="muted small">{personName ?? 'Customer'}{task.description ? ` · ${task.description}` : ''}</div>
-              </div>
-              <div className="actions-inline">
-                {task.lead_id ? <Link className="button secondary" href={`/dashboard/leads/${task.lead_id}`}>Open lead</Link> : null}
-                <CompleteTaskButton taskId={task.id} />
-              </div>
-            </div>
-          })}
-        </div> : null}
-      </section>
-    </main>
+      <TaskFilters
+        filters={filters}
+        users={editorUsers}
+      />
+
+      <TaskList tasks={filteredTasks} />
+    </div>
   )
 }

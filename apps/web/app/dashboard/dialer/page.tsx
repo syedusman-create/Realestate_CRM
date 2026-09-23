@@ -1,141 +1,376 @@
 import Link from 'next/link'
-import { createClient } from '../../../lib/supabase/server'
-import { claimNextForSession, recordDialerDisposition, skipDialerItem, startCampaign, stopDialerSession } from './actions'
 
-const outcomeLabels = {
-  connected: 'Connected',
-  not_connected: 'Not connected',
-  busy: 'Busy',
-  no_answer: 'No answer',
-  wrong_number: 'Wrong number',
-  voicemail: 'Voicemail',
-  callback_requested: 'Callback requested',
-} as const
+import {
+  claimNextDialerItem,
+  pauseDialerSession,
+  resumeDialerSession,
+  startDialerSession,
+  stopDialerSession,
+} from '@/app/dashboard/dialer/actions'
 
-type Session = { id: string; campaign_id: string; status: string; current_queue_item_id: string | null; started_at: string }
+import { createClient } from '@/lib/supabase/server'
 
-export default async function DialerPage({ searchParams }: { searchParams: Promise<{ session?: string }> }) {
-  const { session: sessionId } = await searchParams
-  const supabase = await createClient()
+export default async function DialerPage() {
+  const supabase =
+    await createClient()
 
-  const [{ data: campaigns, error }, { data: roleData }] = await Promise.all([
-    supabase
-      .from('dialer_campaigns')
-      .select('id, name, description, status, dialing_mode, max_attempts, allow_callbacks, allow_voicemail, created_at')
-      .order('created_at', { ascending: false })
-      .limit(50),
-    supabase.rpc('crm_current_user_role'),
-  ])
-  const canManage = ['admin', 'manager', 'super_admin', 'owner'].includes(String(roleData ?? '').toLowerCase())
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  let activeSession: Session | null = null
-  if (sessionId) {
-    const { data } = await supabase
-      .from('dialer_sessions')
-      .select('id, campaign_id, status, current_queue_item_id, started_at')
-      .eq('id', sessionId)
-      .maybeSingle()
-    activeSession = data as Session | null
+  if (!user) {
+    return null
   }
 
-  let currentLead: { id: string; display_name: string; phone: string; lead_id: string; attempt_count: number } | null = null
-  if (activeSession?.current_queue_item_id) {
-    const { data: item } = await supabase
-      .from('dialer_campaign_leads')
-      .select('id, lead_id, person_id, phone_id, attempt_count')
-      .eq('id', activeSession.current_queue_item_id)
-      .maybeSingle()
-    if (item) {
-      const [{ data: person }, { data: phone }] = await Promise.all([
-        supabase.from('people').select('display_name').eq('id', item.person_id).maybeSingle(),
-        supabase.from('person_phones').select('phone_number').eq('id', item.phone_id).maybeSingle(),
+  const [
+    campaignsResult,
+    sessionResult,
+  ] = await Promise.all([
+    supabase
+      .from(
+        'dialer_campaigns',
+      )
+      .select(
+        'id, name, status, dialing_mode',
+      )
+      .eq(
+        'status',
+        'running',
+      )
+      .order('name'),
+
+    supabase
+      .from(
+        'dialer_sessions',
+      )
+      .select(
+        `
+          id,
+          campaign_id,
+          status,
+          started_at,
+          paused_at,
+          current_queue_item_id
+        `,
+      )
+      .eq(
+        'agent_id',
+        user.id,
+      )
+      .in('status', [
+        'running',
+        'paused',
       ])
-      if (person && phone) {
-        currentLead = {
-          id: item.id,
-          display_name: person.display_name,
-          phone: phone.phone_number,
-          lead_id: item.lead_id,
-          attempt_count: item.attempt_count,
-        }
-      }
-    }
+      .order(
+        'started_at',
+        {
+          ascending: false,
+        },
+      )
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (campaignsResult.error) {
+    throw new Error(
+      campaignsResult.error.message,
+    )
+  }
+
+  if (sessionResult.error) {
+    throw new Error(
+      sessionResult.error.message,
+    )
+  }
+
+  const campaigns =
+    campaignsResult.data ??
+    []
+
+  const session =
+    sessionResult.data
+
+  const activeCampaign =
+    session
+      ? campaigns.find(
+          (campaign) =>
+            campaign.id ===
+            session.campaign_id,
+        ) ?? null
+      : null
+
+  async function startSession(
+    campaignId: string,
+  ) {
+    'use server'
+
+    await startDialerSession(
+      campaignId,
+    )
+  }
+
+  async function pauseSession(
+    sessionId: string,
+  ) {
+    'use server'
+
+    await pauseDialerSession(
+      sessionId,
+    )
+  }
+
+  async function resumeSession(
+    sessionId: string,
+  ) {
+    'use server'
+
+    await resumeDialerSession(
+      sessionId,
+    )
+  }
+
+  async function stopSession(
+    sessionId: string,
+  ) {
+    'use server'
+
+    await stopDialerSession(
+      sessionId,
+    )
+  }
+
+  async function claimNext(
+    sessionId: string,
+    campaignId: string,
+  ) {
+    'use server'
+
+    await claimNextDialerItem(
+      sessionId,
+      campaignId,
+    )
   }
 
   return (
-    <main className="page">
-      <div className="page-header">
+    <main className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="eyebrow">CALLING</div>
-          <h1>Campaign dialer</h1>
-          <p className="muted">Queue-aware assisted calling with atomic lead claiming and canonical CRM call history.</p>
-        </div>
-        <div className="actions-inline">
-          {canManage ? <Link className="button secondary" href="/dashboard/dialer/admin/new">Create campaign</Link> : null}
-          <Link className="button secondary" href="/dashboard/leads">Leads</Link>
-          {activeSession?.status === 'running' ? (
-            <form action={stopDialerSession.bind(null, activeSession.id)}><button className="button danger" type="submit">Stop session</button></form>
-          ) : null}
-        </div>
-      </div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Dialer
+          </p>
 
-      {activeSession?.status === 'running' ? (
-        <section className="panel dialer-focus">
-          <div className="section-title"><h2>Current call</h2><span className="badge warm">Session active</span></div>
-          {currentLead ? (
-            <>
-              <div className="dialer-contact">
-                <div>
-                  <div className="eyebrow">NEXT LEAD · ATTEMPT {currentLead.attempt_count}</div>
-                  <h2>{currentLead.display_name}</h2>
-                  <p className="phone-number">{currentLead.phone}</p>
-                  <p className="muted small">Lead ID {currentLead.lead_id}</p>
-                </div>
-                <div className="actions-inline">
-                  <a className="button" href={`tel:${currentLead.phone}`}>Call</a>
-                  <Link className="button secondary" href={`/dashboard/leads/${currentLead.lead_id}`}>Open lead</Link>
-                </div>
-              </div>
-              <form className="dialer-disposition" action={recordDialerDisposition.bind(null, activeSession.id, currentLead.id)}>
-                <label>Disposition<select name="outcome" defaultValue="connected" required>{Object.entries(outcomeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                <label>Notes<textarea name="notes" rows={3} placeholder="Capture objections, follow-up context, or call notes…" /></label>
-                <div className="actions-inline"><button className="button" type="submit">Save disposition</button><button className="button secondary" type="submit" formAction={skipDialerItem.bind(null, activeSession.id, currentLead.id)}>Skip lead</button></div>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+            Calling workspace
+          </h1>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Work active campaign queues from the calling device.
+          </p>
+        </div>
+
+        <Link
+          href="/dashboard/dialer/admin"
+          className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Campaign management
+        </Link>
+      </header>
+
+      {session &&
+      activeCampaign ? (
+        <section className="rounded-xl border bg-card p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Active campaign
+              </p>
+
+              <h2 className="mt-1 text-xl font-semibold">
+                {activeCampaign.name}
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                {activeCampaign.dialing_mode}
+                {' · '}
+                Session {session.status}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {session.status ===
+                'running' && (
+                <form
+                  action={async () => {
+                    'use server'
+                    await claimNext(
+                      session.id,
+                      activeCampaign.id,
+                    )
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                  >
+                    Claim next lead
+                  </button>
+                </form>
+              )}
+
+              {session.status ===
+                'running' ? (
+                <form
+                  action={async () => {
+                    'use server'
+                    await pauseSession(
+                      session.id,
+                    )
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+                  >
+                    Pause
+                  </button>
+                </form>
+              ) : (
+                <form
+                  action={async () => {
+                    'use server'
+                    await resumeSession(
+                      session.id,
+                    )
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                  >
+                    Resume
+                  </button>
+                </form>
+              )}
+
+              <form
+                action={async () => {
+                  'use server'
+                  await stopSession(
+                    session.id,
+                  )
+                }}
+              >
+                <button
+                  type="submit"
+                  className="rounded-md border border-destructive/40 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/5"
+                >
+                  Stop
+                </button>
               </form>
-              <form className="next-lead-form" action={claimNextForSession.bind(null, activeSession.id, activeSession.campaign_id)}><button className="link-button" type="submit">Claim next available lead →</button></form>
-            </>
-          ) : <div className="empty"><strong>Queue is clear.</strong><p className="muted">No eligible leads are available right now. Leads with a future retry time become claimable automatically.</p></div>}
-        </section>
-      ) : null}
+            </div>
+          </div>
 
-      <section className="panel">
-        <div className="section-title"><h2>Campaigns</h2><span className="muted small">{campaigns?.length ?? 0} available</span></div>
-        {error ? <div className="empty">Unable to load campaigns: {error.message}</div> : null}
-        {!error && !campaigns?.length ? <div className="empty">No dialer campaigns yet. Managers can create one and load eligible leads.</div> : null}
-        {campaigns?.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} activeSessionId={activeSession?.id ?? null} canManage={canManage} />)}
-      </section>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <Metric
+              label="Session status"
+              value={
+                session.status
+              }
+            />
+
+            <Metric
+              label="Current queue item"
+              value={
+                session.current_queue_item_id
+                  ? 'Claimed'
+                  : 'Ready'
+              }
+            />
+
+            <Metric
+              label="Dialing mode"
+              value={
+                activeCampaign.dialing_mode
+              }
+            />
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-xl border bg-card p-5">
+          <h2 className="font-semibold">
+            Start a campaign session
+          </h2>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Select one of the campaigns currently running.
+          </p>
+
+          {!campaigns.length ? (
+            <div className="mt-5 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No campaigns are currently running.
+            </div>
+          ) : (
+            <div className="mt-5 divide-y rounded-lg border">
+              {campaigns.map(
+                (campaign) => (
+                  <div
+                    key={
+                      campaign.id
+                    }
+                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <h3 className="font-medium">
+                        {campaign.name}
+                      </h3>
+
+                      <p className="text-sm text-muted-foreground">
+                        {campaign.dialing_mode}
+                      </p>
+                    </div>
+
+                    <form
+                      action={async () => {
+                        'use server'
+                        await startSession(
+                          campaign.id,
+                        )
+                      }}
+                    >
+                      <button
+                        type="submit"
+                        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                      >
+                        Start session
+                      </button>
+                    </form>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+        </section>
+      )}
     </main>
   )
 }
 
-async function CampaignCard({ campaign, activeSessionId, canManage }: { campaign: { id: string; name: string; description: string | null; status: string; dialing_mode: string; max_attempts: number; allow_callbacks: boolean; allow_voicemail: boolean; created_at: string }; activeSessionId: string | null; canManage: boolean }) {
-  const supabase = await createClient()
-  const [{ count: queued }, { count: dialing }, { count: completed }] = await Promise.all([
-    supabase.from('dialer_campaign_leads').select('id', { count: 'exact', head: true }).eq('campaign_id', campaign.id).eq('status', 'queued'),
-    supabase.from('dialer_campaign_leads').select('id', { count: 'exact', head: true }).eq('campaign_id', campaign.id).eq('status', 'dialing'),
-    supabase.from('dialer_campaign_leads').select('id', { count: 'exact', head: true }).eq('campaign_id', campaign.id).eq('status', 'completed'),
-  ])
-
+function Metric({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
   return (
-    <article className="campaign-card">
-      <div>
-        <div className="row-between"><h3>{campaign.name}</h3><span className={`badge ${campaign.status === 'running' ? 'warm' : 'cold'}`}>{campaign.status}</span></div>
-        <p className="muted">{campaign.description ?? 'No description'}</p>
-        <div className="stats-inline"><span><strong>{queued ?? 0}</strong> queued</span><span><strong>{dialing ?? 0}</strong> dialing</span><span><strong>{completed ?? 0}</strong> completed</span><span>Mode: <strong>{campaign.dialing_mode}</strong></span></div>
-      </div>
-      <div className="actions-inline">
-        {canManage ? <Link className="button secondary" href={`/dashboard/dialer/admin/${campaign.id}`}>Manage</Link> : null}
-        {campaign.status === 'running' && !activeSessionId ? <form action={startCampaign.bind(null, campaign.id)}><button className="button" type="submit">Start session</button></form> : campaign.status !== 'running' ? <button className="button secondary" type="button" disabled>{campaign.status}</button> : <span className="muted small">Session already active</span>}
-      </div>
-    </article>
+    <div className="rounded-lg bg-muted/50 p-4">
+      <p className="text-xs text-muted-foreground">
+        {label}
+      </p>
+
+      <p className="mt-1 font-semibold capitalize">
+        {value}
+      </p>
+    </div>
   )
 }

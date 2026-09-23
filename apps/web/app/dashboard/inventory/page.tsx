@@ -1,93 +1,207 @@
-import Link from 'next/link'
-import { createClient } from '../../../lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { InventoryHeader } from '@/components/inventory/inventory-header'
+import { InventoryMetrics } from '@/components/inventory/inventory-metrics'
+import { InventoryFilters } from '@/components/inventory/inventory-filters'
+import { InventoryList } from '@/components/inventory/inventory-list'
+import {
+  calculateInventoryMetrics,
+  type InventoryItem,
+  type ListingType,
+  type PropertyType,
+  type UnitStatus,
+} from '@/lib/crm/inventory/types'
 
-function money(value: number | null) {
-  if (value == null) return '—'
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value)
+type SearchParams = {
+  q?: string
+  project?: string
+  developer?: string
+  status?: string
+  propertyType?: string
+  listingType?: string
 }
 
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; city?: string }> }) {
+type Props = {
+  searchParams: Promise<SearchParams>
+}
+
+export default async function InventoryPage({
+  searchParams,
+}: Props) {
   const params = await searchParams
-  const q = params.q?.trim() ?? ''
-  const status = params.status?.trim() ?? ''
-  const city = params.city?.trim() ?? ''
   const supabase = await createClient()
 
-  const { data: role } = await supabase.rpc('crm_current_user_role')
-  const canManage = ['admin', 'manager', 'super_admin', 'owner'].includes(String(role ?? '').toLowerCase())
+  const [
+    projectsResult,
+    developersResult,
+    unitsResult,
+    configurationsResult,
+    listingsResult,
+  ] = await Promise.all([
+    supabase
+      .from('projects')
+      .select('*')
+      .order('name')
+      .limit(500),
 
-  let query = supabase
-    .from('projects')
-    .select('id, name, slug, property_category, property_type, city, state, status, possession_date, price_min, price_max, developer_id, location_id, total_units, total_towers')
-    .order('updated_at', { ascending: false })
-    .limit(100)
+    supabase
+      .from('developers')
+      .select('*')
+      .order('name')
+      .limit(500),
 
-  if (q) query = query.or(`name.ilike.%${q}%,city.ilike.%${q}%,state.ilike.%${q}%`)
-  if (status) query = query.eq('status', status)
-  if (city) query = query.ilike('city', `%${city}%`)
+    supabase
+      .from('units')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000),
 
-  const { data: projects, error } = await query
-  const developerIds = [...new Set((projects ?? []).map((project) => project.developer_id).filter(Boolean))] as string[]
-  const { data: developers } = developerIds.length
-    ? await supabase.from('developers').select('id, name').in('id', developerIds)
-    : { data: [] as { id: string; name: string }[] }
-  const developerMap = new Map((developers ?? []).map((developer) => [developer.id, developer.name]))
+    supabase
+      .from('project_configurations')
+      .select('*')
+      .order('configuration_name')
+      .limit(1000),
+
+    supabase
+      .from('listings')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000),
+  ])
+
+  const firstError =
+    projectsResult.error ??
+    developersResult.error ??
+    unitsResult.error ??
+    configurationsResult.error ??
+    listingsResult.error
+
+  if (firstError) {
+    throw new Error(firstError.message)
+  }
+
+  const projects = projectsResult.data ?? []
+  const developers = developersResult.data ?? []
+  const units = unitsResult.data ?? []
+  const configurations = configurationsResult.data ?? []
+  const listings = listingsResult.data ?? []
+
+  const projectMap = new Map(
+    projects.map((project) => [project.id, project]),
+  )
+
+  const developerMap = new Map(
+    developers.map((developer) => [developer.id, developer]),
+  )
+
+  const configurationMap = new Map(
+    configurations.map((configuration) => [
+      configuration.id,
+      configuration,
+    ]),
+  )
+
+  const listingMap = new Map(
+    listings.map((listing) => [listing.unit_id, listing]),
+  )
+
+  const metrics = calculateInventoryMetrics(units)
+
+  const query = (params.q ?? '').trim().toLowerCase()
+  const projectId = params.project ?? ''
+  const developerId = params.developer ?? ''
+  const status = params.status ?? ''
+  const propertyType = params.propertyType ?? ''
+  const listingType = params.listingType ?? ''
+
+  const items: InventoryItem[] = units
+    .map((unit) => {
+      const project = projectMap.get(unit.project_id) ?? null
+      const configuration = unit.configuration_id
+        ? configurationMap.get(unit.configuration_id) ?? null
+        : null
+      const developer = project?.developer_id
+        ? developerMap.get(project.developer_id) ?? null
+        : null
+      const listing = listingMap.get(unit.id) ?? null
+
+      return {
+        ...unit,
+        project,
+        configuration,
+        developer,
+        listing,
+      }
+    })
+    .filter((item) => {
+      if (
+        query &&
+        ![
+          item.unit_number,
+          item.project?.name,
+          item.developer?.name,
+          item.configuration?.configuration_name,
+          item.project?.city,
+        ]
+          .filter(Boolean)
+          .some((value) =>
+            String(value).toLowerCase().includes(query),
+          )
+      ) {
+        return false
+      }
+
+      if (projectId && item.project_id !== projectId) {
+        return false
+      }
+
+      if (
+        developerId &&
+        item.project?.developer_id !== developerId
+      ) {
+        return false
+      }
+
+      if (status && item.status !== (status as UnitStatus)) {
+        return false
+      }
+
+      if (
+        propertyType &&
+        item.project?.property_type !==
+          (propertyType as PropertyType)
+      ) {
+        return false
+      }
+
+      if (
+        listingType &&
+        item.listing?.listing_type !==
+          (listingType as ListingType)
+      ) {
+        return false
+      }
+
+      return true
+    })
 
   return (
-    <main className="page">
-      <div className="page-header">
-        <div>
-          <div className="eyebrow">PORTFOLIO</div>
-          <h1>Inventory</h1>
-          <p className="muted">Projects, configurations, units and listings from the shared property master.</p>
-        </div>
-        <div className="actions-inline">
-          <Link className="button secondary" href="/dashboard">Overview</Link>
-          {canManage ? <Link className="button" href="/dashboard/inventory/new">Add project</Link> : null}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <InventoryHeader />
 
-      <section className="panel">
-        <form className="filters" method="get">
-          <div className="search-form">
-            <input name="q" defaultValue={q} placeholder="Search project, city or state…" />
-            <button className="button" type="submit">Search</button>
-          </div>
-          <select name="status" defaultValue={status} aria-label="Project status">
-            <option value="">All status</option>
-            {['upcoming', 'pre_launch', 'launched', 'under_construction', 'ready_to_move', 'completed', 'sold_out', 'inactive'].map((item) => <option key={item} value={item}>{item.replaceAll('_', ' ')}</option>)}
-          </select>
-        </form>
+      <InventoryMetrics metrics={metrics} />
 
-        {error ? <div className="empty">Unable to load inventory: {error.message}</div> : null}
-        {!error && !projects?.length ? (
-          <div className="empty">
-            <strong>No projects in the property master yet.</strong>
-            <p className="muted">The inventory schema is ready. Managers can add projects now; configurations, units and listings can then be loaded against the project.</p>
-            {canManage ? <p style={{ marginTop: 14 }}><Link className="button" href="/dashboard/inventory/new">Add the first project</Link></p> : null}
-          </div>
-        ) : null}
+      <InventoryFilters
+        projects={projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+        }))}
+        developers={developers.map((developer) => ({
+          id: developer.id,
+          name: developer.name,
+        }))}
+      />
 
-        {projects?.length ? (
-          <div className="panel table-wrap" style={{ padding: 0 }}>
-            <table>
-              <thead><tr><th>Project</th><th>Developer</th><th>Location</th><th>Type</th><th>Status</th><th>Price</th></tr></thead>
-              <tbody>
-                {projects.map((project) => (
-                  <tr key={project.id}>
-                    <td><Link className="table-link" href={`/dashboard/inventory/${project.id}`}>{project.name}</Link><div className="muted small">{project.total_units ?? 0} units · {project.total_towers ?? 0} towers</div></td>
-                    <td>{project.developer_id ? developerMap.get(project.developer_id) ?? '—' : '—'}</td>
-                    <td>{[project.city, project.state].filter(Boolean).join(', ') || '—'}</td>
-                    <td className="capitalize">{String(project.property_type).replaceAll('_', ' ')}</td>
-                    <td><span className={`badge ${project.status === 'ready_to_move' || project.status === 'launched' ? 'warm' : 'cold'}`}>{String(project.status).replaceAll('_', ' ')}</span></td>
-                    <td>{money(project.price_min)}{project.price_max ? ` – ${money(project.price_max)}` : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </section>
-    </main>
+      <InventoryList items={items} />
+    </div>
   )
 }
