@@ -1,6 +1,7 @@
 import type { Tables } from '@realestate-crm/database'
 
-export type DialerCampaign = Tables<'dialer_campaigns'>
+export type DialerCampaign =
+  Tables<'dialer_campaigns'>
 
 export type DialerCampaignLead =
   Tables<'dialer_campaign_leads'>
@@ -147,16 +148,79 @@ export type CampaignQueueMetrics = {
   dnc: number
 }
 
+/* -------------------------------------------------------------------------- */
+/* User dialer workspace                                                      */
+/* -------------------------------------------------------------------------- */
+
+export type UserCampaignMetrics = {
+  total: number
+  completed: number
+  remaining: number
+  callbacks: number
+  attempts: number
+}
+
+export type UserCampaignActivity = {
+  callsToday: number
+  connectedToday: number
+  noAnswerToday: number
+  callbacksToday: number
+}
+
+export type UserCampaignView = {
+  id: string
+  name: string
+  description: string | null
+  status: DialerCampaignStatus
+  dialingMode: DialerMode
+  distributionMode: CampaignDistributionMode
+  memberCount: number
+  metrics: UserCampaignMetrics
+  activity: UserCampaignActivity
+  isMember: boolean
+}
+
+export type UserDialerSessionView = {
+  id: string
+  campaignId: string
+  status: DialerSessionStatus
+  startedAt: string
+  pausedAt: string | null
+  currentQueueItemId: string | null
+  deviceId: string | null
+  lastHeartbeatAt: string
+}
+
+export type DeviceConnectionState =
+  | 'connected'
+  | 'disconnected'
+  | 'waiting'
+  | 'unknown'
+
+export type UserCampaignWorkspaceData = {
+  campaign: UserCampaignView
+  session: UserDialerSessionView | null
+  deviceState: DeviceConnectionState
+}
+
+/* -------------------------------------------------------------------------- */
+/* Labels                                                                     */
+/* -------------------------------------------------------------------------- */
+
 export function campaignStatusLabel(value: string) {
   switch (value) {
     case 'running':
       return 'Running'
+
     case 'paused':
       return 'Paused'
+
     case 'completed':
       return 'Completed'
+
     case 'archived':
       return 'Archived'
+
     case 'draft':
     default:
       return 'Draft'
@@ -167,8 +231,10 @@ export function dialerModeLabel(value: string) {
   switch (value) {
     case 'preview':
       return 'Preview'
+
     case 'power':
       return 'Power'
+
     case 'assisted':
     default:
       return 'Assisted'
@@ -179,10 +245,13 @@ export function distributionModeLabel(value: string) {
   switch (value) {
     case 'equal_split':
       return 'Equal split'
+
     case 'round_robin':
       return 'Round robin'
+
     case 'on_demand':
       return 'On demand'
+
     default:
       return value
   }
@@ -208,24 +277,34 @@ export function queueStatusLabel(value: string) {
   switch (value) {
     case 'dialing':
       return 'Dialing'
+
     case 'connected':
       return 'Connected'
+
     case 'completed':
       return 'Completed'
+
     case 'callback':
       return 'Callback'
+
     case 'failed':
       return 'Failed'
+
     case 'dnc':
       return 'Do Not Call'
+
     case 'busy':
       return 'Busy'
+
     case 'no_answer':
       return 'No answer'
+
     case 'wrong_number':
       return 'Wrong number'
+
     case 'voicemail':
       return 'Voicemail'
+
     case 'queued':
     default:
       return 'Queued'
