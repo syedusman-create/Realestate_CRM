@@ -69,9 +69,9 @@ export function InventoryCreateForm({
   return (
     <form action={formAction} className="space-y-6">
       {state.message ? (
-        <div className={\`rounded-md border px-4 py-3 text-sm \${
+        <div className={`rounded-md border px-4 py-3 text-sm ${
           state.ok ? 'border-border bg-muted/30' : 'border-destructive/30 text-destructive'
-        }\`}>
+        }`}>
           {state.message}
         </div>
       ) : null}
@@ -100,7 +100,7 @@ export function InventoryCreateForm({
             <span className="font-medium">Tower</span>
             <select name="tower_id" defaultValue="" className="h-9 w-full rounded-md border bg-background px-3" disabled={!phaseId}>
               <option value="">No tower</option>
-              {towersForPhase.map((tower) => <option key={tower.id} value={tower.id}>{tower.name}{tower.tower_code ? \` (\${tower.tower_code})\` : ''}</option>)}
+              {towersForPhase.map((tower) => <option key={tower.id} value={tower.id}>{tower.name}{tower.tower_code ? ` (${tower.tower_code})` : ''}</option>)}
             </select>
           </label>
           <label className="space-y-1.5 text-sm">
