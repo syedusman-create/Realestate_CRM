@@ -13,6 +13,8 @@ import {
   type Listing,
   type Project,
   type ProjectConfiguration,
+  type ProjectPhase,
+  type ProjectTower,
   type Unit,
 } from '@/lib/crm/inventory/types'
 
@@ -21,6 +23,8 @@ type Props = {
   project: Project | null
   developer: Developer | null
   configuration: ProjectConfiguration | null
+  phase: ProjectPhase | null
+  tower: ProjectTower | null
   listing: Listing | null
 }
 
@@ -29,6 +33,8 @@ export function InventoryDetail({
   project,
   developer,
   configuration,
+  phase,
+  tower,
   listing,
 }: Props) {
   return (
@@ -57,6 +63,20 @@ export function InventoryDetail({
             <div className="mt-1 font-medium">
               {developer?.name ?? '—'}
             </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Phase
+            </div>
+            <div className="mt-1 font-medium">{phase?.name ?? '—'}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Tower
+            </div>
+            <div className="mt-1 font-medium">{tower?.name ?? '—'}</div>
           </div>
 
           <div>

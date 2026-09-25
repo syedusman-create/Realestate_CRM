@@ -35,10 +35,7 @@ export default async function ProjectPage({
 
     supabase
       .from('units')
-      .select('id', {
-        count: 'exact',
-        head: true,
-      })
+      .select('id, status')
       .eq('project_id', id),
   ])
 
@@ -86,7 +83,13 @@ export default async function ProjectPage({
           ...projectResult.data,
           developer,
         }}
-        unitCount={unitsResult.count ?? 0}
+        unitCount={unitsResult.data?.length ?? 0}
+        unitStatusCounts={{
+          available: unitsResult.data?.filter((unit) => unit.status === 'available').length ?? 0,
+          reserved: unitsResult.data?.filter((unit) => unit.status === 'reserved').length ?? 0,
+          sold: unitsResult.data?.filter((unit) => unit.status === 'sold').length ?? 0,
+          leased: unitsResult.data?.filter((unit) => unit.status === 'leased').length ?? 0,
+        }}
         configurationCount={
           configurationsResult.data?.length ?? 0
         }
@@ -101,10 +104,10 @@ export default async function ProjectPage({
 
       <div>
         <Link
-          href={`/dashboard/inventory?project=${id}`}
+          href={`/dashboard/inventory/new?project=${id}`}
           className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-muted"
         >
-          View project inventory
+          Add property
         </Link>
       </div>
     </div>
