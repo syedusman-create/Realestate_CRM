@@ -41,7 +41,7 @@ export function InventoryFilters({
     if (value) params.set(key, value)
     else params.delete(key)
 
-    router.push(\`/dashboard/inventory?\${params.toString()}\`)
+    router.push(`/dashboard/inventory?${params.toString()}`)
   }
 
   useEffect(() => () => {
@@ -79,7 +79,7 @@ export function InventoryFilters({
         params.delete('phase')
         params.delete('tower')
         params.delete('configuration')
-        router.push(\`/dashboard/inventory?\${params.toString()}\`)
+        router.push(`/dashboard/inventory?${params.toString()}`)
       }}>
         <option value="">All projects</option>
         {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
@@ -95,7 +95,7 @@ export function InventoryFilters({
         if (event.target.value) params.set('phase', event.target.value)
         else params.delete('phase')
         params.delete('tower')
-        router.push(\`/dashboard/inventory?\${params.toString()}\`)
+        router.push(`/dashboard/inventory?${params.toString()}`)
       }}>
         <option value="">All phases</option>
         {visiblePhases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}
@@ -103,7 +103,7 @@ export function InventoryFilters({
 
       <select className="h-9 rounded-md border bg-background px-3 text-sm" value={searchParams.get('tower') ?? ''} onChange={(event) => updateFilter('tower', event.target.value)}>
         <option value="">All towers</option>
-        {visibleTowers.map((tower) => <option key={tower.id} value={tower.id}>{tower.name}{tower.towerCode ? \` (\${tower.towerCode})\` : ''}</option>)}
+        {visibleTowers.map((tower) => <option key={tower.id} value={tower.id}>{tower.name}{tower.towerCode ? ` (${tower.towerCode})` : ''}</option>)}
       </select>
 
       <select className="h-9 rounded-md border bg-background px-3 text-sm" value={searchParams.get('configuration') ?? ''} onChange={(event) => updateFilter('configuration', event.target.value)}>
