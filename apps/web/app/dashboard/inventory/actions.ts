@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { hasPermission } from '@/lib/auth/permissions'
 import { normalizeCrmRole } from '@/lib/auth/roles'
-import { redirect } from 'next/navigation'
 import type {
   InventoryActionState,
   ListingStatus,
@@ -411,7 +410,7 @@ export async function createUnit(
   formData: FormData,
 ): Promise<InventoryActionState> {
   try {
-    const { supabase, profile } = await getCurrentUserContext()
+    const { supabase, profile, tenant } = await getCurrentUserContext()
     const role = normalizeCrmRole(profile.role)
 
     if (!hasPermission(role, 'inventory.manage')) {
@@ -579,7 +578,7 @@ export async function createUnit(
       }
 
       const { error: listingError } = await supabase.from('listings').insert({
-        tenant_id: (await supabase.rpc('crm_current_tenant_id')).data,
+        tenant_id: tenant.id,
         unit_id: unit.id,
         listing_type: listingType,
         agent_id: profile.id,
