@@ -35,10 +35,7 @@ export default async function ProjectPage({
 
     supabase
       .from('units')
-      .select('id', {
-        count: 'exact',
-        head: true,
-      })
+      .select('id, status')
       .eq('project_id', id),
   ])
 
