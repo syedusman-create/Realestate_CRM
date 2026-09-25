@@ -12,7 +12,7 @@ export function InventoryViewSwitcher({ value }: Props) {
   function setView(view: 'table' | 'matrix') {
     const params = new URLSearchParams(searchParams.toString())
     params.set('view', view)
-    router.push(\`/dashboard/inventory?\${params.toString()}\`)
+    router.push(`/dashboard/inventory?${params.toString()}`)
   }
 
   return (
