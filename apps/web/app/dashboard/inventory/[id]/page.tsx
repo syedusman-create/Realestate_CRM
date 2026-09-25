@@ -36,6 +36,8 @@ export default async function InventoryDetailPage({
     listingResult,
     projectsResult,
     configurationsResult,
+    phasesResult,
+    towersResult,
     developerResult,
   ] = await Promise.all([
     supabase
@@ -77,6 +79,19 @@ export default async function InventoryDetailPage({
       .limit(500),
 
     supabase
+      .from('project_phases')
+      .select('*')
+      .eq('project_id', unit.project_id)
+      .order('phase_number')
+      .order('name')
+      .limit(500),
+
+    supabase
+      .from('project_towers')
+      .select('*')
+      .limit(1000),
+
+    supabase
       .from('projects')
       .select('developer_id')
       .eq('id', unit.project_id)
@@ -89,6 +104,8 @@ export default async function InventoryDetailPage({
     listingResult.error ??
     projectsResult.error ??
     configurationsResult.error ??
+    phasesResult.error ??
+    towersResult.error ??
     developerResult.error
 
   if (firstError) {
@@ -140,12 +157,16 @@ export default async function InventoryDetailPage({
         project={project}
         developer={developer}
         configuration={configuration}
+        phase={unit.phase_id ? (phasesResult.data ?? []).find((phase) => phase.id === unit.phase_id) ?? null : null}
+        tower={unit.tower_id ? (towersResult.data ?? []).find((tower) => tower.id === unit.tower_id) ?? null : null}
         listing={listing}
       />
 
       <InventoryEditor
         unit={unit}
         projects={projectsResult.data ?? []}
+        phases={phasesResult.data ?? []}
+        towers={towersResult.data ?? []}
         configurations={configurationsResult.data ?? []}
       />
     </div>
