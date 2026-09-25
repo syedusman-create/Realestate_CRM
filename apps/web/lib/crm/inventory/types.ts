@@ -61,6 +61,7 @@ export type InventoryMetrics = {
 export type InventoryActionState = {
   ok: boolean
   message: string
+  unitId?: string
 }
 
 export const EMPTY_INVENTORY_ACTION_STATE: InventoryActionState = {
