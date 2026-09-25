@@ -355,7 +355,7 @@ function parseInventoryNumber(formData: FormData, name: string) {
 
   const value = Number(raw)
   if (!Number.isFinite(value) || value < 0) {
-    throw new Error(\`\${name} must be a valid non-negative number.\`)
+    throw new Error(`${name} must be a valid non-negative number.`)
   }
 
   return value
@@ -367,7 +367,7 @@ function parseInventoryInteger(formData: FormData, name: string) {
 
   const value = Number(raw)
   if (!Number.isInteger(value) || value < 0) {
-    throw new Error(\`\${name} must be a valid non-negative whole number.\`)
+    throw new Error(`${name} must be a valid non-negative whole number.`)
   }
 
   return value
@@ -507,7 +507,7 @@ export async function createUnit(
     if (duplicate) {
       return {
         ok: false,
-        message: \`Unit "\${unitNumber}" already exists in this project.\`,
+        message: `Unit "${unitNumber}" already exists in this project.`,
       }
     }
 
@@ -596,14 +596,14 @@ export async function createUnit(
       if (listingError) {
         return {
           ok: false,
-          message: \`Unit created, but listing creation failed: \${listingError.message}\`,
+          message: `Unit created, but listing creation failed: ${listingError.message}`,
         }
       }
     }
 
     revalidatePath('/dashboard/inventory')
     revalidatePath('/dashboard/inventory/projects')
-    redirect(\`/dashboard/inventory/\${unit.id}\`)
+    redirect(`/dashboard/inventory/${unit.id}`)
   } catch (error) {
     return {
       ok: false,
