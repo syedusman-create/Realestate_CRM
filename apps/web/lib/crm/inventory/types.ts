@@ -7,6 +7,8 @@ import type {
 
 export type Unit = Tables<'units'>
 export type Project = Tables<'projects'>
+export type ProjectPhase = Tables<'project_phases'>
+export type ProjectTower = Tables<'project_towers'>
 export type Developer = Tables<'developers'>
 export type ProjectConfiguration = Tables<'project_configurations'>
 export type Listing = Tables<'listings'>
@@ -26,6 +28,8 @@ export type ListingUpdate = TablesUpdate<'listings'>
 
 export type InventoryItem = Unit & {
   project: Project | null
+  phase: ProjectPhase | null
+  tower: ProjectTower | null
   configuration: ProjectConfiguration | null
   developer: Developer | null
   listing: Listing | null
@@ -35,6 +39,9 @@ export type InventoryFilters = {
   q: string
   projectId: string
   developerId: string
+  phaseId: string
+  towerId: string
+  configurationId: string
   status: 'all' | UnitStatus
   propertyType: 'all' | PropertyType
   listingType: 'all' | ListingType
