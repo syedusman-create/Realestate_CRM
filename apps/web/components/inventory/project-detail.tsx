@@ -18,13 +18,30 @@ type Props = {
   project: ProjectWithDeveloper
   unitCount: number
   configurationCount: number
+  unitStatusCounts?: Record<
+    string,
+    number
+  >
 }
 
 export function ProjectDetail({
   project,
   unitCount,
   configurationCount,
+  unitStatusCounts = {},
 }: Props) {
+  const available =
+    unitStatusCounts.available ?? 0
+
+  const reserved =
+    unitStatusCounts.reserved ?? 0
+
+  const sold =
+    unitStatusCounts.sold ?? 0
+
+  const leased =
+    unitStatusCounts.leased ?? 0
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -41,17 +58,37 @@ export function ProjectDetail({
           </h1>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            {project.developer?.name ?? 'No developer'} ·{' '}
-            {formatPropertyType(project.property_type)}
+            {project.developer?.name ??
+              'No developer'}{' '}
+            ·{' '}
+            {formatPropertyType(
+              project.property_type,
+            )}
           </p>
         </div>
 
-        <Link
-          href={`/dashboard/inventory/projects/${project.id}/edit`}
-          className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-muted"
-        >
-          Edit project
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/dashboard/inventory/new?project=${project.id}`}
+            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Add property
+          </Link>
+
+          <Link
+            href={`/dashboard/inventory?project=${project.id}`}
+            className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-muted"
+          >
+            View inventory
+          </Link>
+
+          <Link
+            href={`/dashboard/inventory/projects/${project.id}/edit`}
+            className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-muted"
+          >
+            Edit project
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -61,6 +98,7 @@ export function ProjectDetail({
               Configurations
             </CardTitle>
           </CardHeader>
+
           <CardContent>
             <div className="text-2xl font-semibold">
               {configurationCount}
@@ -74,6 +112,7 @@ export function ProjectDetail({
               Units
             </CardTitle>
           </CardHeader>
+
           <CardContent>
             <div className="text-2xl font-semibold">
               {unitCount}
@@ -87,9 +126,12 @@ export function ProjectDetail({
               Project status
             </CardTitle>
           </CardHeader>
+
           <CardContent>
             <div className="text-lg font-semibold">
-              {formatProjectStatus(project.status)}
+              {formatProjectStatus(
+                project.status,
+              )}
             </div>
           </CardContent>
         </Card>
@@ -97,7 +139,69 @@ export function ProjectDetail({
 
       <Card>
         <CardHeader>
-          <CardTitle>Project information</CardTitle>
+          <CardTitle>
+            Inventory snapshot
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Available
+            </div>
+
+            <div className="mt-1 text-xl font-semibold">
+              {available}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Reserved
+            </div>
+
+            <div className="mt-1 text-xl font-semibold">
+              {reserved}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Sold
+            </div>
+
+            <div className="mt-1 text-xl font-semibold">
+              {sold}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Leased
+            </div>
+
+            <div className="mt-1 text-xl font-semibold">
+              {leased}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Total units
+            </div>
+
+            <div className="mt-1 text-xl font-semibold">
+              {unitCount}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Project information
+          </CardTitle>
         </CardHeader>
 
         <CardContent className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -105,6 +209,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Category
             </div>
+
             <div className="mt-1 font-medium">
               {formatPropertyCategory(
                 project.property_category,
@@ -116,6 +221,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Property type
             </div>
+
             <div className="mt-1 font-medium">
               {formatPropertyType(
                 project.property_type,
@@ -127,6 +233,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Developer
             </div>
+
             <div className="mt-1 font-medium">
               {project.developer?.name ?? '—'}
             </div>
@@ -136,6 +243,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               RERA
             </div>
+
             <div className="mt-1 font-medium">
               {project.rera_number ?? '—'}
             </div>
@@ -145,6 +253,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Location
             </div>
+
             <div className="mt-1 font-medium">
               {[
                 project.city,
@@ -160,6 +269,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Land area
             </div>
+
             <div className="mt-1 font-medium">
               {project.land_area_sqft
                 ? `${formatProjectNumber(
@@ -173,6 +283,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Towers
             </div>
+
             <div className="mt-1 font-medium">
               {project.total_towers ?? '—'}
             </div>
@@ -182,6 +293,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Floors
             </div>
+
             <div className="mt-1 font-medium">
               {project.total_floors ?? '—'}
             </div>
@@ -191,6 +303,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Launch
             </div>
+
             <div className="mt-1 font-medium">
               {project.launch_date ?? '—'}
             </div>
@@ -200,6 +313,7 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Possession
             </div>
+
             <div className="mt-1 font-medium">
               {project.possession_date ?? '—'}
             </div>
@@ -209,8 +323,11 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Price from
             </div>
+
             <div className="mt-1 font-medium">
-              {formatProjectCurrency(project.price_min)}
+              {formatProjectCurrency(
+                project.price_min,
+              )}
             </div>
           </div>
 
@@ -218,8 +335,11 @@ export function ProjectDetail({
             <div className="text-xs text-muted-foreground">
               Price to
             </div>
+
             <div className="mt-1 font-medium">
-              {formatProjectCurrency(project.price_max)}
+              {formatProjectCurrency(
+                project.price_max,
+              )}
             </div>
           </div>
         </CardContent>
@@ -229,7 +349,9 @@ export function ProjectDetail({
         project.highlights) && (
         <Card>
           <CardHeader>
-            <CardTitle>Project overview</CardTitle>
+            <CardTitle>
+              Project overview
+            </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-5">
@@ -238,6 +360,7 @@ export function ProjectDetail({
                 <div className="text-xs font-medium text-muted-foreground">
                   Description
                 </div>
+
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
                   {project.description}
                 </p>
@@ -249,6 +372,7 @@ export function ProjectDetail({
                 <div className="text-xs font-medium text-muted-foreground">
                   Highlights
                 </div>
+
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
                   {project.highlights}
                 </p>

@@ -13,6 +13,8 @@ import {
   type Listing,
   type Project,
   type ProjectConfiguration,
+  type ProjectPhase,
+  type ProjectTower,
   type Unit,
 } from '@/lib/crm/inventory/types'
 
@@ -21,6 +23,8 @@ type Props = {
   project: Project | null
   developer: Developer | null
   configuration: ProjectConfiguration | null
+  phase: ProjectPhase | null
+  tower: ProjectTower | null
   listing: Listing | null
 }
 
@@ -29,6 +33,8 @@ export function InventoryDetail({
   project,
   developer,
   configuration,
+  phase,
+  tower,
   listing,
 }: Props) {
   return (
@@ -45,6 +51,7 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Project
             </div>
+
             <div className="mt-1 font-medium">
               {project?.name ?? '—'}
             </div>
@@ -54,6 +61,7 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Developer
             </div>
+
             <div className="mt-1 font-medium">
               {developer?.name ?? '—'}
             </div>
@@ -63,10 +71,33 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Property type
             </div>
+
             <div className="mt-1 font-medium">
               {project
-                ? formatPropertyType(project.property_type)
+                ? formatPropertyType(
+                    project.property_type,
+                  )
                 : '—'}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Phase
+            </div>
+
+            <div className="mt-1 font-medium">
+              {phase?.name ?? '—'}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Tower
+            </div>
+
+            <div className="mt-1 font-medium">
+              {tower?.name ?? '—'}
             </div>
           </div>
 
@@ -74,8 +105,10 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Configuration
             </div>
+
             <div className="mt-1 font-medium">
-              {configuration?.configuration_name ?? '—'}
+              {configuration?.configuration_name ??
+                '—'}
             </div>
           </div>
 
@@ -83,6 +116,7 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Floor
             </div>
+
             <div className="mt-1 font-medium">
               {unit.floor_number ?? '—'}
             </div>
@@ -92,8 +126,11 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Status
             </div>
+
             <div className="mt-1">
-              <InventoryStatusBadge status={unit.status} />
+              <InventoryStatusBadge
+                status={unit.status}
+              />
             </div>
           </div>
 
@@ -101,6 +138,7 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Bedrooms
             </div>
+
             <div className="mt-1 font-medium">
               {formatNumber(unit.bedrooms)}
             </div>
@@ -110,6 +148,7 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Bathrooms
             </div>
+
             <div className="mt-1 font-medium">
               {formatNumber(unit.bathrooms)}
             </div>
@@ -117,8 +156,21 @@ export function InventoryDetail({
 
           <div>
             <div className="text-xs text-muted-foreground">
+              Parking
+            </div>
+
+            <div className="mt-1 font-medium">
+              {formatNumber(
+                unit.parking_count,
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
               Facing
             </div>
+
             <div className="mt-1 font-medium">
               {unit.facing ?? '—'}
             </div>
@@ -128,9 +180,12 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Carpet area
             </div>
+
             <div className="mt-1 font-medium">
               {unit.carpet_area_sqft
-                ? `${formatNumber(unit.carpet_area_sqft)} sq.ft`
+                ? `${formatNumber(
+                    unit.carpet_area_sqft,
+                  )} sq.ft`
                 : '—'}
             </div>
           </div>
@@ -139,9 +194,12 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Built-up area
             </div>
+
             <div className="mt-1 font-medium">
               {unit.builtup_area_sqft
-                ? `${formatNumber(unit.builtup_area_sqft)} sq.ft`
+                ? `${formatNumber(
+                    unit.builtup_area_sqft,
+                  )} sq.ft`
                 : '—'}
             </div>
           </div>
@@ -150,9 +208,26 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Super built-up
             </div>
+
             <div className="mt-1 font-medium">
               {unit.super_builtup_area_sqft
-                ? `${formatNumber(unit.super_builtup_area_sqft)} sq.ft`
+                ? `${formatNumber(
+                    unit.super_builtup_area_sqft,
+                  )} sq.ft`
+                : '—'}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Balcony area
+            </div>
+
+            <div className="mt-1 font-medium">
+              {unit.balcony_area_sqft
+                ? `${formatNumber(
+                    unit.balcony_area_sqft,
+                  )} sq.ft`
                 : '—'}
             </div>
           </div>
@@ -161,8 +236,11 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Asking price
             </div>
+
             <div className="mt-1 text-lg font-semibold">
-              {formatCurrency(unit.asking_price)}
+              {formatCurrency(
+                unit.asking_price,
+              )}
             </div>
           </div>
 
@@ -170,8 +248,11 @@ export function InventoryDetail({
             <div className="text-xs text-muted-foreground">
               Price / sq.ft
             </div>
+
             <div className="mt-1 font-medium">
-              {formatCurrency(unit.price_per_sqft)}
+              {formatCurrency(
+                unit.price_per_sqft,
+              )}
             </div>
           </div>
         </CardContent>
@@ -189,6 +270,7 @@ export function InventoryDetail({
                 <div className="text-xs text-muted-foreground">
                   Type
                 </div>
+
                 <div className="mt-1 font-medium">
                   {listing.listing_type}
                 </div>
@@ -198,6 +280,7 @@ export function InventoryDetail({
                 <div className="text-xs text-muted-foreground">
                   Status
                 </div>
+
                 <div className="mt-1 font-medium">
                   {listing.status}
                 </div>
@@ -207,8 +290,11 @@ export function InventoryDetail({
                 <div className="text-xs text-muted-foreground">
                   Asking price
                 </div>
+
                 <div className="mt-1 font-medium">
-                  {formatCurrency(listing.asking_price)}
+                  {formatCurrency(
+                    listing.asking_price,
+                  )}
                 </div>
               </div>
 
@@ -216,8 +302,11 @@ export function InventoryDetail({
                 <div className="text-xs text-muted-foreground">
                   Rent
                 </div>
+
                 <div className="mt-1 font-medium">
-                  {formatCurrency(listing.rent_amount)}
+                  {formatCurrency(
+                    listing.rent_amount,
+                  )}
                 </div>
               </div>
 
@@ -225,8 +314,11 @@ export function InventoryDetail({
                 <div className="text-xs text-muted-foreground">
                   Maintenance
                 </div>
+
                 <div className="mt-1 font-medium">
-                  {formatCurrency(listing.maintenance_amount)}
+                  {formatCurrency(
+                    listing.maintenance_amount,
+                  )}
                 </div>
               </div>
 
@@ -235,6 +327,7 @@ export function InventoryDetail({
                   <div className="text-xs text-muted-foreground">
                     Description
                   </div>
+
                   <p className="mt-1 text-sm">
                     {listing.description}
                   </p>

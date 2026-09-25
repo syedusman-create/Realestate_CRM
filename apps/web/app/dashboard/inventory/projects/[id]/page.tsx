@@ -35,15 +35,14 @@ export default async function ProjectPage({
 
     supabase
       .from('units')
-      .select('id', {
-        count: 'exact',
-        head: true,
-      })
+      .select('id, status')
       .eq('project_id', id),
   ])
 
   if (projectResult.error) {
-    throw new Error(projectResult.error.message)
+    throw new Error(
+      projectResult.error.message,
+    )
   }
 
   if (configurationsResult.error) {
@@ -53,7 +52,9 @@ export default async function ProjectPage({
   }
 
   if (unitsResult.error) {
-    throw new Error(unitsResult.error.message)
+    throw new Error(
+      unitsResult.error.message,
+    )
   }
 
   if (!projectResult.data) {
@@ -63,7 +64,10 @@ export default async function ProjectPage({
   let developer = null
 
   if (projectResult.data.developer_id) {
-    const { data, error } = await supabase
+    const {
+      data,
+      error,
+    } = await supabase
       .from('developers')
       .select('*')
       .eq(
@@ -79,6 +83,17 @@ export default async function ProjectPage({
     developer = data
   }
 
+  const unitStatusCounts: Record<
+    string,
+    number
+  > = {}
+
+  for (const unit of unitsResult.data ?? []) {
+    unitStatusCounts[unit.status] =
+      (unitStatusCounts[unit.status] ?? 0) +
+      1
+  }
+
   return (
     <div className="space-y-8">
       <ProjectDetail
@@ -86,9 +101,15 @@ export default async function ProjectPage({
           ...projectResult.data,
           developer,
         }}
-        unitCount={unitsResult.count ?? 0}
+        unitCount={
+          unitsResult.data?.length ?? 0
+        }
         configurationCount={
-          configurationsResult.data?.length ?? 0
+          configurationsResult.data
+            ?.length ?? 0
+        }
+        unitStatusCounts={
+          unitStatusCounts
         }
       />
 
