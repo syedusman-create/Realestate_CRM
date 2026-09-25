@@ -5,19 +5,23 @@ export function InventoryHeader() {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Inventory
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
         <p className="text-sm text-muted-foreground">
           Manage projects, units, availability, pricing, and listings.
         </p>
       </div>
 
-      
-        <Link href="/dashboard/inventory" className={buttonVariants()}>
-          Refresh inventory
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/dashboard/inventory/new" className={buttonVariants()}>
+          Add property
         </Link>
-      
+        <Link href="/dashboard/imports/properties" className={buttonVariants({ variant: 'secondary' })}>
+          Import
+        </Link>
+        <Button asChild variant="outline">
+          <Link href="/dashboard/inventory/projects">Projects</Link>
+        </Button>
+      </div>
     </div>
   )
 }
