@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useMemo, useState } from 'react'
+import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Tables } from '@realestate-crm/database'
 import { createUnit } from '@/app/dashboard/inventory/actions'
 import {
@@ -52,10 +53,18 @@ export function InventoryCreateForm({
     [configurations, projectId],
   )
 
+  const router = useRouter()
+
   const [state, formAction, pending] = useActionState(
     createUnit,
     EMPTY_INVENTORY_ACTION_STATE,
   )
+
+  useEffect(() => {
+    if (state.ok && state.unitId) {
+      router.push(`/dashboard/inventory/${state.unitId}`)
+    }
+  }, [router, state.ok, state.unitId])
 
   return (
     <form action={formAction} className="space-y-6">
