@@ -49,11 +49,11 @@ export function InventoryList({ items }: Props) {
               {items.map((item) => (
                 <tr key={item.id} className="transition-colors hover:bg-muted/30">
                   <td className="px-4 py-3">
-                    <Link href={\`/dashboard/inventory/\${item.id}\`} className="font-medium hover:underline">
+                    <Link href={`/dashboard/inventory/${item.id}`} className="font-medium hover:underline">
                       {item.unit_number}
                     </Link>
                     <div className="text-xs text-muted-foreground">
-                      {[item.facing && \`\${item.facing} facing\`, item.parking_count != null && \`\${item.parking_count} parking\`].filter(Boolean).join(' · ') || '—'}
+                      {[item.facing && `${item.facing} facing`, item.parking_count != null && `${item.parking_count} parking`].filter(Boolean).join(' · ') || '—'}
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -67,17 +67,17 @@ export function InventoryList({ items }: Props) {
                   <td className="px-4 py-3">
                     {item.configuration?.configuration_name ?? '—'}
                     <div className="text-xs text-muted-foreground">
-                      {item.bedrooms !== null ? \`\${formatNumber(item.bedrooms)} BHK\` : 'BHK not specified'}
+                      {item.bedrooms !== null ? `${formatNumber(item.bedrooms)} BHK` : 'BHK not specified'}
                     </div>
                   </td>
                   <td className="px-4 py-3">{item.floor_number ?? '—'}</td>
                   <td className="px-4 py-3">
                     {item.super_builtup_area_sqft
-                      ? \`\${formatNumber(item.super_builtup_area_sqft)} sq.ft\`
+                      ? `${formatNumber(item.super_builtup_area_sqft)} sq.ft`
                       : item.builtup_area_sqft
-                        ? \`\${formatNumber(item.builtup_area_sqft)} sq.ft\`
+                        ? `${formatNumber(item.builtup_area_sqft)} sq.ft`
                         : item.carpet_area_sqft
-                          ? \`\${formatNumber(item.carpet_area_sqft)} sq.ft carpet\`
+                          ? `${formatNumber(item.carpet_area_sqft)} sq.ft carpet`
                           : '—'}
                   </td>
                   <td className="px-4 py-3 font-medium">{formatCurrency(item.asking_price)}</td>
