@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 
 export function InventoryHeader() {
   return (
@@ -18,9 +18,9 @@ export function InventoryHeader() {
         <Link href="/dashboard/imports/properties" className={buttonVariants({ variant: 'secondary' })}>
           Import
         </Link>
-        <Button asChild variant="outline">
-          <Link href="/dashboard/inventory/projects">Projects</Link>
-        </Button>
+        <Link href="/dashboard/inventory/projects" className={buttonVariants({ variant: 'outline' })}>
+          Projects
+        </Link>
       </div>
     </div>
   )
