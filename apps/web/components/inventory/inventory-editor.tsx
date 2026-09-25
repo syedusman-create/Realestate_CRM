@@ -95,7 +95,7 @@ export function InventoryEditor({
           <span className="font-medium">Tower</span>
           <select name="tower_id" defaultValue={unit.tower_id ?? ''} className="h-9 w-full rounded-md border bg-background px-3">
             <option value="">No tower</option>
-            {towersForPhase.map((tower) => <option key={tower.id} value={tower.id}>{tower.name}{tower.tower_code ? \` (\${tower.tower_code})\` : ''}</option>)}
+            {towersForPhase.map((tower) => <option key={tower.id} value={tower.id}>{tower.name}{tower.tower_code ? ` (${tower.tower_code})` : ''}</option>)}
           </select>
         </label>
 
