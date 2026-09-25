@@ -18,12 +18,19 @@ type Props = {
   project: ProjectWithDeveloper
   unitCount: number
   configurationCount: number
+  unitStatusCounts: {
+    available: number
+    reserved: number
+    sold: number
+    leased: number
+  }
 }
 
 export function ProjectDetail({
   project,
   unitCount,
   configurationCount,
+  unitStatusCounts,
 }: Props) {
   return (
     <div className="space-y-6">
@@ -46,12 +53,20 @@ export function ProjectDetail({
           </p>
         </div>
 
-        <Link
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/dashboard/inventory/new?project=${project.id}`} className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90">
+            Add property
+          </Link>
+          <Link href={`/dashboard/inventory?project=${project.id}`} className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-muted">
+            View inventory
+          </Link>
+          <Link
           href={`/dashboard/inventory/projects/${project.id}/edit`}
           className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-muted"
-        >
-          Edit project
-        </Link>
+          >
+            Edit project
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -94,6 +109,16 @@ export function ProjectDetail({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Inventory snapshot</CardTitle></CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div><div className="text-xs text-muted-foreground">Available</div><div className="mt-1 text-2xl font-semibold">{unitStatusCounts.available}</div></div>
+          <div><div className="text-xs text-muted-foreground">Reserved</div><div className="mt-1 text-2xl font-semibold">{unitStatusCounts.reserved}</div></div>
+          <div><div className="text-xs text-muted-foreground">Sold</div><div className="mt-1 text-2xl font-semibold">{unitStatusCounts.sold}</div></div>
+          <div><div className="text-xs text-muted-foreground">Leased</div><div className="mt-1 text-2xl font-semibold">{unitStatusCounts.leased}</div></div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
